@@ -6,6 +6,7 @@ import * as UI from './ui.js';
 import { ERAS, GENERATIONS_PER_ERA } from './data.js';
 import { Joystick } from './controls.js';
 import { Sound } from './audio.js';
+import { VERSION } from './version.js';
 
 const world = new World(document.getElementById('scene'));
 const joystick = new Joystick();
@@ -58,7 +59,11 @@ function titleScreen() {
         <span><input id="species-name" value="${game.name}" maxlength="40"><button id="reroll" title="Random name">🎲</button></span>
       </label>
       <button class="primary" id="start">Begin as a single cell</button>
-      <p class="hint">Swim, crawl or walk with the joystick or WASD · meet the life of each era · Space/Shift to rise and sink<br>Drag to orbit · scroll to zoom · M to mute</p>
+      <p class="hint">
+        <span class="desktop">Swim, crawl or walk with the joystick or WASD · meet the life of each era · Space/Shift to rise and sink<br>Drag to orbit · scroll to zoom · M to mute</span>
+        <span class="touch">Move with the joystick · ▲▼ to rise and sink · meet the life of each era<br>Drag to orbit · pinch to zoom</span>
+      </p>
+      <p class="version">v${VERSION}</p>
     </div>`, {
     buttons: {
       '#reroll': () => { document.getElementById('species-name').value = G.randomSpeciesName(); },

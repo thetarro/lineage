@@ -59,7 +59,9 @@ export class World {
   constructor(container) {
     this.container = container;
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // Phones get a lighter render: lower resolution and smaller shadow maps.
+    const phone = window.matchMedia('(pointer: coarse)').matches && Math.min(window.innerWidth, window.innerHeight) < 600;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, phone ? 1.5 : 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(this.renderer.domElement);
@@ -81,7 +83,7 @@ export class World {
     this.sun = new THREE.DirectionalLight(0xffffff, 1.5);
     this.sun.position.set(10, 25, 8);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.mapSize.setScalar(phone ? 1024 : 2048);
     Object.assign(this.sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30 });
     this.scene.add(this.hemi, this.sun);
 
