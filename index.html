@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lineage</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧬</text></svg>">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="scene"></div>
+
+  <div id="hud" hidden>
+    <section id="era-panel" class="panel"></section>
+    <section id="species-panel" class="panel"></section>
+    <div id="warning" hidden></div>
+    <section id="log" class="panel"></section>
+    <div id="actions"></div>
+  </div>
+
+  <div id="banner"></div>
+  <div id="toast"></div>
+  <button id="mute" title="Mute (M)">🔊</button>
+
+  <div id="modal" hidden>
+    <div id="modal-content"></div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
