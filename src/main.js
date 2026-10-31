@@ -95,8 +95,10 @@ function startEra() {
     </div>
     ${UI.cardsHTML(fork.options, game)}`, {
     onPick: (id) => {
+      const prevDiet = game.diet?.name;
       const c = G.applyChoice(game, id, 'fork');
       UI.log(`<b>${UI.fmtMya(game.mya)}</b>: ${c.icon} Major evolution: <b>${c.name}</b>.`);
+      if (!c.diet && game.diet?.name !== prevDiet) UI.log(`🍽️ <b>${prevDiet}</b> is no use on land. Your diet falls back to <b>${game.diet.name}</b>.`);
       setHabitat(); // habitat forks (land, deep sea, reef) change the scenery
       world.setCreature(game, { evolve: true });
       sound.evolve();

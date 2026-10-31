@@ -145,15 +145,19 @@ export function applyChoice(g, id, kind) {
   for (const t of c.removeTags ?? []) g.tags.delete(t);
   for (const t of c.tags ?? []) g.tags.add(t);
   g.tags.add(id);
+  if (c.removeTags?.includes('aquatic')) leaveWater(g);
   if (c.diet) adoptDiet(g, c);
   g.history.push({ era: g.era, mya: g.mya, kind, id, name: c.name, icon: c.icon });
   return c;
 }
 
+// Sea diets (choices that require the water) stop working on land.
+const isSeaDiet = (c) => c.requires?.habitat === 'aquatic';
+
 function adoptDiet(g, c) {
   const prev = g.diet;
   if (!prev) {
-    g.diet = { ...c.diet, name: c.name, sources: { ...c.diet.sources } };
+    g.diet = { ...c.diet, name: c.name, sources: { ...c.diet.sources }, sea: isSeaDiet(c) };
     return;
   }
   if (prev.line === 'omnivore') {
@@ -163,10 +167,20 @@ function adoptDiet(g, c) {
     for (const [k, w] of Object.entries(c.diet.sources)) sources[k] = (sources[k] ?? 0) + w * 0.5;
     const lean = c.diet.line !== 'omnivore';
     const tier = Math.max(1, Math.max(prev.tier, c.diet.tier) - (lean ? 1 : 0));
-    g.diet = { line: 'omnivore', tier, sources, name: c.name };
+    g.diet = { line: 'omnivore', tier, sources, name: c.name, sea: prev.sea || isSeaDiet(c) };
     return;
   }
-  g.diet = { ...c.diet, name: c.name, sources: { ...c.diet.sources } };
+  g.diet = { ...c.diet, name: c.name, sources: { ...c.diet.sources }, sea: isSeaDiet(c) };
+}
+
+/** Going ashore cancels sea food: a sea diet falls back to the line's basic diet, and plankton is dropped. */
+function leaveWater(g) {
+  if (!g.diet) return;
+  if (g.diet.sea) {
+    const base = CHOICES[g.diet.line];
+    g.diet = { ...base.diet, name: base.name, sea: false };
+  }
+  g.diet.sources = Object.fromEntries(Object.entries(g.diet.sources).filter(([k]) => k !== 'plankton'));
 }
 
 /** Live one generation: food/water/oxygen meters update, population grows or shrinks. */
