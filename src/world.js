@@ -690,10 +690,12 @@ function buildCreature(g) {
       root.add(ring);
     }
     for (const side of [-1, 1]) {
-      const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.8, 4), ringMat);
-      antenna.position.set(side * 0.12, 0.3, front + 0.2);
-      antenna.rotation.set(0.9, 0, side * -0.4);
-      root.add(antenna);
+      // Arachnids have grasping pedipalps where insects have antennae.
+      const arachnid = tags.has('arachnid');
+      const feeler = new THREE.Mesh(new THREE.CylinderGeometry(arachnid ? 0.03 : 0.015, 0.015, arachnid ? 0.35 : 0.8, 4), ringMat);
+      feeler.position.set(side * 0.12, arachnid ? -0.05 : 0.3, front + (arachnid ? 0.15 : 0.2));
+      feeler.rotation.set(arachnid ? 1.3 : 0.9, 0, side * -0.4);
+      root.add(feeler);
     }
   }
   if (tags.has('pressureArmor') && !tags.has('shell')) {
@@ -764,16 +766,20 @@ function buildCreature(g) {
       parts.flap.push(pivot);
     }
   } else {
+    // Vertebrates walk on four upright legs; arthropods on six or eight thin, splayed ones.
     const legMat = mat(color.clone().multiplyScalar(0.7));
-    const legLen = 0.55;
-    legHeight = 0.2 + legLen;
-    let i = 0;
+    const arthropod = tags.has('exoskeleton');
+    const pairs = !arthropod ? 2 : tags.has('arachnid') ? 4 : 3;
+    const legLen = arthropod ? 0.75 : 0.55;
+    const splay = arthropod ? 0.75 : 0;
+    legHeight = 0.2 + legLen * Math.cos(splay);
     for (const side of [-1, 1]) {
-      for (const end of [-1, 1]) {
+      for (let k = 0; k < pairs; k++) {
         const pivot = new THREE.Group();
-        pivot.position.set(side * 0.3, -0.2, end * len * 0.25);
-        pivot.userData.offset = (i++ % 2) * Math.PI;
-        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.05, legLen, 5), legMat);
+        pivot.position.set(side * 0.3, -0.2, (k / (pairs - 1) - 0.5) * len * 0.5);
+        pivot.rotation.z = side * splay;
+        pivot.userData.offset = ((k + (side > 0 ? 1 : 0)) % 2) * Math.PI; // alternating gait
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(arthropod ? 0.035 : 0.07, arthropod ? 0.025 : 0.05, legLen, 5), legMat);
         leg.position.y = -legLen / 2;
         pivot.add(leg);
         root.add(pivot);
@@ -783,7 +789,18 @@ function buildCreature(g) {
       }
     }
   }
-  if (tags.has('flight')) {
+  if (tags.has('flight') && tags.has('insect')) {
+    // Two pairs of veined membranes; butterfly-like scaled wings after metamorphosis.
+    const scaled = tags.has('metamorphosis');
+    for (const [z, length] of [[front * 0.3, 1.1], [front * -0.05, 0.85]]) {
+      for (const side of [-1, 1]) {
+        const shoulder = buildInsectWing(side, length, scaled ? color.clone().lerp(new THREE.Color(0xff9a1f), 0.6) : null);
+        shoulder.position.set(side * 0.2, 0.3, z);
+        root.add(shoulder);
+        parts.wings.push(shoulder);
+      }
+    }
+  } else if (tags.has('flight')) {
     const feathered = tags.has('feathers');
     for (const side of [-1, 1]) {
       const { shoulder, wrist } = buildWing(side, feathered, color);
@@ -837,6 +854,27 @@ function bone(parent, material, [x1, y1], [x2, y2], r) {
   m.position.copy(a).add(b).multiplyScalar(0.5);
   m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.sub(a).normalize());
   parent.add(m);
+}
+
+/** A single insect wing: a long membrane, clear and veined unless `scaleColor` is given. */
+function buildInsectWing(side, length, scaleColor) {
+  const shoulder = new THREE.Group();
+  shoulder.userData.side = side;
+  const half = new THREE.Group();
+  half.scale.x = side;
+  shoulder.add(half);
+  const s = new THREE.Shape();
+  s.moveTo(0, -0.03);
+  s.quadraticCurveTo(length * 0.6, -0.12, length, 0.08);
+  s.quadraticCurveTo(length * 0.9, 0.32, length * 0.45, 0.3);
+  s.quadraticCurveTo(length * 0.15, 0.28, 0, 0.08);
+  const membrane = scaleColor
+    ? mat(scaleColor, { side: THREE.DoubleSide })
+    : new THREE.MeshPhysicalMaterial({ color: 0xdff4ff, transparent: true, opacity: 0.35, roughness: 0.1, side: THREE.DoubleSide });
+  half.add(new THREE.Mesh(flatGeo(s), membrane));
+  const veinMat = mat(scaleColor ? 0x2e2620 : 0x4a5560);
+  for (const tip of [[length, 0.08], [length * 0.8, 0.28], [length * 0.45, 0.3]]) bone(half, veinMat, [0, 0.02], tip, 0.012);
+  return shoulder;
 }
 
 function buildWing(side, feathered, color) {

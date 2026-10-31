@@ -126,6 +126,35 @@ export const CHOICES = {
     name: 'Feathers', icon: '🪶', desc: 'Light, warm, and maybe one day... flight.',
     traits: { speed: 1, adaptability: 1 }, tags: ['feathers'],
   },
+  // Arthropods on land take these forks instead of the vertebrate ones.
+  insectWings: {
+    name: 'Wings', icon: '🪰', desc: 'Flaps of cuticle become the first wings on Earth. The sky is empty.',
+    traits: { speed: 2, size: -1 }, tags: ['insect', 'flight'],
+  },
+  arachnid: {
+    name: 'Eight Legs', icon: '🕷️', desc: 'Become an arachnid: venom, silk and patience.',
+    traits: { defense: 2, metabolism: -1 }, tags: ['arachnid'],
+  },
+  metamorphosis: {
+    name: 'Metamorphosis', icon: '🦋', desc: 'Larvae eat and grow, adults breed and spread. Two lives in one.',
+    traits: { adaptability: 2, reproduction: 1 }, tags: ['metamorphosis'],
+  },
+  colony: {
+    name: 'Colony', icon: '🐜', desc: 'Live in a nest of thousands, with a queen and workers who share every task.',
+    traits: { defense: 2, reproduction: 2, adaptability: -1 }, tags: ['colony', 'social'],
+  },
+  silk: {
+    name: 'Silk Webs', icon: '🕸️', desc: 'Spin traps that catch food while you wait.',
+    traits: { metabolism: -1, adaptability: 2 }, tags: ['silk'],
+  },
+  trapdoor: {
+    name: 'Trapdoor Burrow', icon: '🚪', desc: 'Line a burrow with silk and ambush whatever walks past.',
+    traits: { defense: 2, speed: -1 }, tags: ['burrower'],
+  },
+  diapause: {
+    name: 'Diapause', icon: '💤', desc: 'Pause your life as a frost-proof egg or pupa and sleep through the worst years.',
+    traits: { adaptability: 2, metabolism: -1, speed: -1 }, tags: ['diapause'],
+  },
   giant: {
     name: 'Giant', icon: '🐋', desc: 'Grow enormous. Nothing can eat you, but you eat a lot.',
     traits: { size: 5, metabolism: 2, defense: 2, reproduction: -2 }, tags: ['giant'],
@@ -369,7 +398,7 @@ export const CHOICES = {
   },
   thickHide: {
     name: 'Thick Hide', icon: '🧱', desc: 'Leathery skin against claws and cold.',
-    requires: { habitat: 'terrestrial', minEra: 4 }, traits: { defense: 2, metabolism: 1 },
+    requires: { habitat: 'terrestrial', minEra: 4, notTags: ['exoskeleton'] }, traits: { defense: 2, metabolism: 1 },
   },
 };
 
@@ -408,6 +437,7 @@ export const ERAS = [
     blurb: 'Life spreads into every corner it can reach.',
     forks: [
       { requires: { habitat: 'aquatic' }, options: ['deepSea', 'reef'], title: 'Where in the sea?' },
+      { requires: { habitat: 'terrestrial', tags: ['exoskeleton'] }, options: ['insectWings', 'arachnid'], title: 'Six legs or eight?' },
       { requires: { habitat: 'terrestrial' }, options: ['coldBlooded', 'warmBlooded'], title: 'How will you stay warm?' },
     ],
     event: 'greatDying',
@@ -418,6 +448,8 @@ export const ERAS = [
     forks: [
       { requires: { tags: ['deepSea'] }, options: ['bioluminescence', 'pressureArmor'], title: 'Master the abyss' },
       { requires: { tags: ['reef'] }, options: ['schooling', 'symbiosis'], title: 'Life on the reef' },
+      { requires: { tags: ['insect'] }, options: ['metamorphosis', 'colony'], title: 'How will you raise your young?' },
+      { requires: { tags: ['arachnid'] }, options: ['silk', 'trapdoor'], title: 'How will you catch your food?' },
       { requires: { tags: ['coldBlooded'] }, options: ['eggs', 'liveBirth'], title: 'How will you reproduce?' },
       { requires: { tags: ['warmBlooded'] }, options: ['fur', 'feathers'], title: 'What will keep you warm?' },
     ],
@@ -428,6 +460,7 @@ export const ERAS = [
     blurb: 'An age of giants and minds. The final test approaches.',
     forks: [
       { requires: { habitat: 'aquatic' }, options: ['giant', 'swarm'], title: 'Final form' },
+      { requires: { habitat: 'terrestrial', tags: ['exoskeleton'] }, options: ['swarm', 'diapause'], title: 'Final form' },
       { requires: { habitat: 'terrestrial' }, options: ['flight', 'intelligence'], title: 'Final form' },
     ],
     event: 'iceAge',
@@ -505,6 +538,7 @@ export const EVENTS = {
       { tag: 'browser', value: -0.1, label: 'Forests burn' },
       { tag: 'warmBlooded', value: -0.05, label: 'Heat stress' },
       { tag: 'coldBlooded', value: 0.05, label: 'Tolerates heat' },
+      { tag: 'insect', value: -0.08, label: 'The only mass extinction of insects' },
     ],
     shock: { plants: 0.4, prey: 0.5, shellfish: 0.2, carrion: 1.8 },
     oxygen: 0.6, wetness: 0.5,
@@ -528,6 +562,9 @@ export const EVENTS = {
       { tag: 'detritivore', value: 0.2, label: 'Endless decay' },
       { tag: 'insectivore', value: 0.1, label: 'Insects endure' },
       { tag: 'ventDetritivore', value: 0.2, label: 'Vents are unaffected' },
+      { tag: 'metamorphosis', value: 0.08, label: 'Pupae wait out the dark' },
+      { tag: 'colony', value: 0.05, label: 'Food stored in the nest' },
+      { tag: 'silk', value: 0.05, label: 'Webs catch whatever still moves' },
     ],
     shock: { plants: 0.15, fruit: 0.05, nectar: 0.05, prey: 0.4, carrion: 2.0, insects: 0.7, plankton: 0.5 },
   },
@@ -550,6 +587,9 @@ export const EVENTS = {
       { tag: 'filterFeeder', value: 0.1, label: 'Cold seas teem with plankton' },
       { tag: 'intelligence', value: 0.15, label: 'Finds shelter and fire' },
       { tag: 'liveBirth', value: 0.05, label: 'Young kept warm' },
+      { tag: 'exoskeleton', habitat: 'terrestrial', value: -0.2, label: 'Cold-blooded in the cold' },
+      { tag: 'diapause', value: 0.12, label: 'Sleeps through the winters' },
+      { tag: 'colony', value: 0.05, label: 'The colony huddles for warmth' },
     ],
     shock: { plants: 0.4, fruit: 0.2, nectar: 0.1 },
     wetness: 0.6,
