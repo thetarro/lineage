@@ -18,7 +18,7 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const THEMES = {
   primordial: { bg: 0x1f3b30, near: 6, far: 38, floor: 0x3b3a2a, hemi: 0.9, sun: 0.8, water: true },
   ocean: { bg: 0x0d4a6e, near: 10, far: 55, floor: 0xc2b280, hemi: 1.0, sun: 1.3, water: true },
-  deep: { bg: 0x030c1a, near: 4, far: 30, floor: 0x1b2230, hemi: 0.75, sun: 0.35, water: true },
+  deep: { bg: 0x0b2440, near: 6, far: 40, floor: 0x2e3a50, hemi: 1.0, sun: 0.6, water: true },
   reef: { bg: 0x1a8fb5, near: 14, far: 65, floor: 0xe8d8a8, hemi: 1.1, sun: 1.6, water: true },
   land: { bg: 0x9fd3f0, near: 30, far: 90, floor: 0x6a9a48, hemi: 1.1, sun: 2.2, water: false },
 };
@@ -243,8 +243,8 @@ export class World {
   }
 
   addVents() {
-    const ventMat = mat(0x2a2a30);
-    const glow = new THREE.MeshBasicMaterial({ color: 0xff7a30 });
+    const ventMat = mat(0x3a3a44, { emissive: 0x401808, emissiveIntensity: 0.6 }); // warm from the heat within
+    const glow = new THREE.MeshBasicMaterial({ color: 0xffa050 });
     for (let i = 0; i < 6; i++) {
       const x = rand(-18, 18), z = rand(-18, 18);
       const h = rand(2, 5);
@@ -255,7 +255,7 @@ export class World {
       vent.add(mouth);
       this.env.add(vent);
       if (i < 3) {
-        const light = new THREE.PointLight(0xff7a30, 30, 14);
+        const light = new THREE.PointLight(0xff7a30, 70, 22);
         light.position.set(x, groundHeight(x, z) + h + 0.5, z);
         this.env.add(light);
       }
