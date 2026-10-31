@@ -28,7 +28,8 @@ export const OMNIVORE_EFFICIENCY = 0.75;
 // ---------------------------------------------------------------------------
 // Choices. `requires` fields: tags (all), anyTags, notTags, habitat, minEra,
 // maxEra, line (diet lines allowed; omnivores may "lean" into other lines),
-// trait {name: minValue}.
+// trait {name: minValue}. `guaranteed` (same fields) always puts an eligible
+// minor mutation among the offers while its conditions hold.
 // ---------------------------------------------------------------------------
 
 export const CHOICES = {
@@ -308,7 +309,7 @@ export const CHOICES = {
   // ── General minor mutations ──────────────────────────────────────────────
   aerobic: {
     name: 'Aerobic Respiration', icon: '💨', desc: 'Burn oxygen for energy instead of being poisoned by it.',
-    requires: { maxEra: 1 }, traits: { metabolism: 1, adaptability: 1 }, tags: ['aerobic'],
+    requires: { maxEra: 1 }, guaranteed: { maxEra: 0 }, traits: { metabolism: 1, adaptability: 1 }, tags: ['aerobic'],
   },
   largerBody: {
     name: 'Larger Body', icon: '⬆️', desc: 'Grow bigger. Harder to eat, needs more food.',

@@ -69,16 +69,21 @@ export function forkFor(g) {
   return ERAS[g.era].forks.find((f) => meetsRequirements(g, f.requires)) ?? null;
 }
 
-/** Three random minor mutations; at least one diet specialization when available. */
+/**
+ * Three random minor mutations: guaranteed ones first, then at least one diet
+ * specialization when available.
+ */
 export function minorOptions(g, count = 3) {
   const majorIds = new Set(ERAS.flatMap((e) => e.forks.flatMap((f) => f.options)));
   const eligible = Object.keys(CHOICES).filter(
     (id) => !majorIds.has(id) && !g.tags.has(id) && meetsRequirements(g, CHOICES[id].requires),
   );
-  const diets = shuffle(eligible.filter((id) => CHOICES[id].diet), g.rng);
-  const others = shuffle(eligible.filter((id) => !CHOICES[id].diet), g.rng);
-  const picks = [];
-  if (diets.length) picks.push(diets.shift());
+  const isGuaranteed = (id) => CHOICES[id].guaranteed && meetsRequirements(g, CHOICES[id].guaranteed);
+  const picks = eligible.filter(isGuaranteed).slice(0, count);
+  const rest = eligible.filter((id) => !picks.includes(id));
+  const diets = shuffle(rest.filter((id) => CHOICES[id].diet), g.rng);
+  const others = shuffle(rest.filter((id) => !CHOICES[id].diet), g.rng);
+  if (diets.length && picks.length < count) picks.push(diets.shift());
   for (const id of shuffle([...others, ...diets], g.rng)) {
     if (picks.length >= count) break;
     picks.push(id);

@@ -700,13 +700,21 @@ const B = {
     part(g, cone(0.25, 1.2, 5), m, [0, 1.1, -1.5], [-PI / 2, 0, 0]);
     return g;
   },
-  pterosaur() {
+  pachycephalosaurus() {
     const g = new THREE.Group();
-    const m = mat(0x8a6a4a);
-    part(g, sphere(0.15, 6, 5), m, [0, 0, 0], [0, 0, 0], [0.8, 0.8, 2]);
-    part(g, cone(0.06, 0.7, 4), mat(0xd8b070), [0, 0.05, 0.6], [PI / 2, 0, 0]);
-    part(g, cone(0.05, 0.5, 3), mat(0xc04030), [0, 0.15, 0.1], [-PI / 2 - 0.4, 0, 0]);
-    wings(g, mat(0xa07a50, { side: THREE.DoubleSide }), { span: 1.4, depth: 0.45 });
+    const m = mat(0x8a7a5a), knob = mat(0x5a4a34);
+    part(g, sphere(0.45, 10, 6), m, [0, 1.15, 0], [-0.1, 0, 0], [0.8, 0.8, 1.5]);
+    part(g, cyl(0.12, 0.2, 0.6, 6), m, [0, 1.45, 0.6], [0.8, 0, 0]);
+    part(g, sphere(0.2, 8, 6), m, [0, 1.62, 0.88], [0, 0, 0], [0.9, 0.8, 1.3]);
+    part(g, dome(0.2), mat(0xc8b890), [0, 1.7, 0.86], [0, 0, 0], [1, 1.2, 1.1]); // thick skull dome
+    for (let i = 0; i < 5; i++) {
+      const a = PI * (i / 4 - 0.5);
+      part(g, cone(0.03, 0.08, 4), knob, [Math.sin(a) * 0.18, 1.7, 0.86 - Math.cos(a) * 0.2], [-0.6 * Math.cos(a), 0, -0.6 * Math.sin(a)]);
+    }
+    part(g, cone(0.22, 1.6, 6), m, [0, 1.1, -1.2], [-PI / 2 - 0.08, 0, 0]); // stiff tail
+    legs(g, mat(0x7a6a4a), { x: 0.25, zs: [-0.1], top: 1.0, len: 1.0, r: 0.12 });
+    for (const s of [-1, 1]) part(g, cyl(0.04, 0.03, 0.35, 4), m, [s * 0.22, 0.95, 0.45], [0.4, 0, 0]);
+    eyes(g, 0.12, 1.66, 0.98, 0.03);
     return g;
   },
   mosasaur() {
@@ -1089,7 +1097,7 @@ export const SPECIES = {
   sauropod: { name: 'Sauropods', kind: 'walker', speed: 0.7, size: 1.4, reach: 5, fact: 'The largest animals ever to walk the Earth, some over 30 m long.' },
   theropod: { name: 'Tyrannosaurus', kind: 'walker', speed: 1.4, size: 1.3, reach: 3, fact: 'A 12 m predator with one of the strongest bites of any land animal.' },
   triceratops: { name: 'Triceratops', kind: 'walker', speed: 0.6, size: 1.2, reach: 3, fact: 'A three-horned plant-eater with a bony neck frill.' },
-  pterosaur: { name: 'Pterosaurs', kind: 'flyer', speed: 3.5, size: 1.5, reach: 2, fact: 'Flying reptiles. The largest had 10 m wingspans.' },
+  pachycephalosaurus: { name: 'Pachycephalosaurus', kind: 'walker', speed: 0.8, size: 1.2, reach: 2.5, fact: 'A two-legged plant-eater with a domed skull up to 25 cm thick, possibly used to butt rivals.' },
   cycad: { name: 'Cycads', kind: 'plant', fact: 'Palm-like seed plants, a staple food of plant-eating dinosaurs.' },
   conifer: { name: 'Conifers', kind: 'plant', sway: true, fact: 'Cone-bearing trees that dominated Mesozoic forests.' },
   fern: { name: 'Ferns', kind: 'plant', fact: 'Ancient spore-bearing plants carpeting the forest floor.' },
@@ -1196,7 +1204,7 @@ const ERA_LIFE = [
   {
     water: [['ichthyosaur', 4], ['plesiosaur', 3], ['ammonite', 8], ['fish', 8], ['mosasaur', 2], ['archelon', 3], ['belemnite', 8],
       ['hybodus', 3], ['seaweed', 14]],
-    land: [['sauropod', 2], ['theropod', 2], ['triceratops', 3], ['pterosaur', 4], ['stegosaurus', 2], ['velociraptor', 4], ['ankylosaurus', 2],
+    land: [['sauropod', 2], ['theropod', 2], ['triceratops', 3], ['pachycephalosaurus', 3], ['stegosaurus', 2], ['velociraptor', 4], ['ankylosaurus', 2],
       ['parasaurolophus', 3], ['cycad', 16], ['conifer', 14], ['fern', 30], ['flower', 30]],
   },
   {
