@@ -7,6 +7,8 @@ import { SPECIES, lifeFor } from './fauna.js';
 
 const WATER_LEVEL = -0.4; // land-mode lakes and shoreline
 const BOUNDS = 26; // how far the player can roam from the center
+// Group-living species bring kin along: [tag, followers]. The largest group wins.
+const GROUPS = [['swarm', 14], ['schooling', 10], ['colony', 10], ['packHunter', 6], ['social', 5]];
 
 const groundHeight = (x, z) =>
   Math.sin(x * 0.18) * 0.7 + Math.cos(z * 0.22) * 0.6 + Math.sin((x + z) * 0.08) * 1.0;
@@ -98,6 +100,7 @@ export class World {
     this.mood = { bg: new THREE.Color(), near: 10, far: 50, hemi: 1, sun: 1.5 };
     this.moodTarget = { ...this.mood, bg: new THREE.Color() };
     this.player = null;
+    this.followers = []; // kin of the player's species that travel with it
     this.life = []; // other species: { obj, sp, ...motion }
     this.met = new Set(); // species ids the player has encountered
     this.onEncounter = null;
@@ -346,6 +349,24 @@ export class World {
       phase: 0, anim: 0, moving: 0.3, grow: evolve ? 0 : 1, flying: g.tags.has('flight'),
       speed: (0.9 + g.traits.speed * 0.25) * (g.era === 0 ? 0.5 : 1),
     };
+
+    const lead = this.player;
+    const n = Math.max(0, ...GROUPS.filter(([tag]) => g.tags.has(tag)).map(([, count]) => count));
+    const spread3d = this.aquatic || lead.flying;
+    this.followers = Array.from({ length: n }, (_, i) => {
+      const kin = buildCreature(g);
+      if (n > 8) kin.root.traverse((o) => { o.castShadow = false; });
+      this.avatar.add(kin.root);
+      // Spiral slots around the leader, wider for bigger bodies.
+      const a = i * 2.4;
+      const r = (1.1 + 0.55 * Math.sqrt(i + 1)) * kin.scale * 1.5;
+      const offset = new THREE.Vector3(Math.cos(a) * r, spread3d ? rand(-0.5, 0.5) * r : 0, Math.sin(a) * r);
+      return {
+        ...kin, offset, scale: kin.scale * rand(0.8, 1),
+        pos: lead.pos.clone().add(offset), dir: lead.dir.clone(),
+        phase: rand(0, 6), anim: 0, moving: 0.3, grow: lead.grow, flying: lead.flying, speed: lead.speed,
+      };
+    });
   }
 
   // ── Extinction events ──────────────────────────────────────────────────
@@ -433,7 +454,10 @@ export class World {
     for (const e of this.life) this.moveLife(e, t);
     for (const p of this.particles) this.moveParticles(p, dt, t);
     const lead = this.player;
-    if (lead) this.movePlayer(lead, dt);
+    if (lead) {
+      this.movePlayer(lead, dt);
+      this.moveFollowers(lead, dt, t);
+    }
 
     // Camera travels with the player, keeping the chosen orbit angle.
     this.marker.visible = !!lead;
@@ -527,6 +551,30 @@ export class World {
 
     c.pos.x = Math.max(-BOUNDS, Math.min(BOUNDS, c.pos.x));
     c.pos.z = Math.max(-BOUNDS, Math.min(BOUNDS, c.pos.z));
+    this.poseCreature(c, dt, vertical);
+  }
+
+  /** Kin drift toward their slot around the leader, moving and animating like it. */
+  moveFollowers(lead, dt, t) {
+    const vertical = this.aquatic || lead.flying;
+    for (const f of this.followers) {
+      const target = lead.pos.clone().add(f.offset);
+      target.x += Math.sin(t * 0.7 + f.phase) * 0.3 * f.scale;
+      target.z += Math.cos(t * 0.6 + f.phase) * 0.3 * f.scale;
+      if (vertical) target.y += Math.sin(t * 0.9 + f.phase) * 0.2;
+      const to = target.sub(f.pos);
+      if (!vertical) to.y = 0;
+      f.pos.addScaledVector(to, Math.min(1, dt * 2.2));
+      const flat = new THREE.Vector3(to.x, vertical ? to.y : 0, to.z);
+      const heading = flat.lengthSq() > 0.04 ? flat.normalize() : lead.dir;
+      f.dir.lerp(heading, Math.min(1, dt * 4)).normalize();
+      f.moving = Math.max(lead.moving, Math.min(1, to.length()));
+      this.poseCreature(f, dt, vertical);
+    }
+  }
+
+  /** Keep a creature at a valid height, then place, orient and animate its mesh. */
+  poseCreature(c, dt, vertical) {
     const ground = groundHeight(c.pos.x, c.pos.z);
     if (!vertical) {
       c.pos.y = Math.max(ground, WATER_LEVEL) + c.legHeight * c.scale;
@@ -580,7 +628,7 @@ function buildCreature(g) {
 
   let scale = 0.55 + g.traits.size * 0.12;
   if (tags.has('giant')) scale *= 1.7;
-  if (tags.has('swarm')) scale *= 0.7;
+  if (tags.has('swarm')) scale *= 0.45;
 
   if (g.era === 0) {
     // Single-celled stage.
