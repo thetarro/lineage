@@ -1072,13 +1072,13 @@ export const SPECIES = {
   jellyfish: { name: 'Medusoids', kind: 'drifter', fact: 'Early jellyfish-like drifters, among the oldest animals.' },
   sponge: { name: 'Sponges', kind: 'plant', fact: 'Simple filter-feeding animals with no organs, among the earliest animal lineages.' },
   trilobite: { name: 'Trilobites', kind: 'crawler', speed: 0.4, fact: 'Armored arthropods with crystal eyes. Over 20,000 species lived for 270 million years.' },
-  anomalocaris: { name: 'Anomalocaris', kind: 'swimmer', speed: 1.6, size: 1.2, reach: 1.5, fact: 'A 1 m Cambrian apex predator that grabbed prey with spiny frontal limbs.' },
+  anomalocaris: { name: 'Anomalocaris', kind: 'swimmer', speed: 1.6, size: 1.2, reach: 1.5, fact: 'A Cambrian apex predator that grabbed prey with spiny frontal limbs.' },
   opabinia: { name: 'Opabinia', kind: 'swimmer', speed: 0.8, fact: 'Five eyes and a grasping nozzle. It made scientists laugh when first presented.' },
   hallucigenia: { name: 'Hallucigenia', kind: 'crawler', speed: 0.15, fact: 'A spiny worm so strange it was first reconstructed upside down.' },
   pikaia: { name: 'Pikaia', kind: 'swimmer', speed: 1, fact: 'A tiny swimmer with a notochord, a distant relative of every vertebrate.' },
   eurypterid: { name: 'Sea scorpions', kind: 'crawler', speed: 0.5, size: 1.4, fact: 'Eurypterids; some grew over 2.5 m long, the largest arthropods ever.' },
   orthocone: { name: 'Orthocone nautiloids', kind: 'swimmer', speed: 0.9, size: 1.2, reach: 1.5, fact: 'Squid-like hunters in straight shells up to 6 m long.' },
-  dunkleosteus: { name: 'Dunkleosteus', kind: 'swimmer', speed: 1.4, size: 1.5, reach: 3, fact: 'A 6 m armored fish with self-sharpening bony jaw blades.' },
+  dunkleosteus: { name: 'Dunkleosteus', kind: 'swimmer', speed: 1.4, size: 1.5, reach: 3, fact: 'A giant armored fish with self-sharpening bony jaw blades.' },
   ostracoderm: { name: 'Ostracoderms', kind: 'swimmer', speed: 0.8, fact: 'Jawless armored fish, early experiments in having a backbone.' },
   crinoid: { name: 'Crinoids', kind: 'plant', sway: true, fact: 'Sea lilies: relatives of starfish that filter food from atop long stalks.' },
   cooksonia: { name: 'Cooksonia', kind: 'plant', fact: 'A few centimeters tall, one of the very first plants on land.' },
@@ -1214,6 +1214,14 @@ const ERA_LIFE = [
       ['woollyRhino', 2], ['broadleaf', 18], ['conifer', 6], ['grass', 70], ['flower', 30]],
   },
 ];
+
+/** Every species once, grouped by the era (index into ERAS) where it first appears. */
+export function speciesByEra() {
+  const seen = new Set();
+  return ERA_LIFE.map((e) => [...(e.water ?? []), ...(e.land ?? [])]
+    .map(([id]) => id)
+    .filter((id) => !seen.has(id) && seen.add(id)));
+}
 
 export function lifeFor(era, habitat) {
   const e = ERA_LIFE[Math.min(era, ERA_LIFE.length - 1)];

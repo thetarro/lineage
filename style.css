@@ -285,3 +285,42 @@ button { font: inherit; color: inherit; cursor: pointer; }
   #banner { font-size: 28px; }
   .stick-base { width: 112px; height: 112px; }
 }
+
+/* ── Title buttons & encyclopedia ────────────────────────────────────── */
+
+.title-buttons { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.secondary {
+  background: rgba(255, 255, 255, 0.06); border: 1px solid var(--border); border-radius: 10px;
+  padding: 9px 20px; font-weight: 600; transition: border-color 0.15s, background 0.15s;
+}
+.secondary:hover { border-color: var(--accent); background: rgba(95, 211, 184, 0.08); }
+.secondary small { color: var(--muted); font-weight: 400; margin-left: 4px; font-variant-numeric: tabular-nums; }
+
+.codex { text-align: left; }
+.codex-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.codex-head h2 { margin: 0; flex: 1; font-size: 22px; }
+.codex-count { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+.codex-back { background: none; border: 1px solid var(--border); border-radius: 8px; padding: 5px 12px; color: var(--muted); }
+.codex-back:hover { color: var(--text); border-color: var(--accent); }
+.codex-hint { color: var(--muted); font-size: 12.5px; margin: 6px 0 4px; }
+.codex-era { margin: 20px 0 8px; font-size: 15px; }
+.codex-era span { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+.codex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
+.codex-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 6px 8px;
+  background: rgba(12, 28, 40, 0.92); border: 1px solid var(--border); border-radius: 12px;
+  font-size: 12px; font-weight: 600; text-align: center; transition: transform 0.15s, border-color 0.15s;
+}
+.codex-tile img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; }
+button.codex-tile:hover { transform: translateY(-3px); border-color: var(--accent); }
+.codex-tile.locked { color: var(--muted); opacity: 0.75; cursor: not-allowed; }
+
+.codex-entry { max-width: 620px; margin: 0 auto; }
+.codex-hero { display: block; width: min(360px, 100%); aspect-ratio: 4 / 3; object-fit: contain; margin: 4px auto 0; }
+.codex-entry h2 { text-align: center; margin: 4px 0 14px; font-size: 26px; }
+.codex-stats { display: grid; gap: 8px; margin: 0 0 18px; }
+.codex-stats div { display: grid; grid-template-columns: 96px 1fr; gap: 10px; background: rgba(255, 255, 255, 0.04); border-radius: 10px; padding: 8px 12px; }
+.codex-stats dt { color: var(--muted); font-size: 12.5px; }
+.codex-stats dd { margin: 0; }
+.codex-entry h3 { margin: 0 0 6px; font-size: 15px; }
+.codex-facts { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: #d6e2e9; }

@@ -7,17 +7,22 @@ import { ERAS, GENERATIONS_PER_ERA } from './data.js';
 import { Joystick } from './controls.js';
 import { Sound } from './audio.js';
 import { VERSION } from './version.js';
+import { openEncyclopedia, loadDiscovered, saveDiscovered, progress } from './encyclopedia.js';
 
 const world = new World(document.getElementById('scene'));
 const joystick = new Joystick();
 const sound = new Sound();
 world.input = joystick.state;
 let game;
+const discovered = loadDiscovered(); // species met in any game, for the encyclopedia
 
 // First time the player gets near another species: introduce it.
 world.onEncounter = (sp) => {
   if (document.getElementById('hud').hidden) { world.met.delete(sp.id); return; }
-  UI.toast(`<div class="toast-kicker">New species encountered</div><b>${sp.name}</b><p>${sp.fact}</p>`);
+  const first = !discovered.has(sp.id);
+  discovered.add(sp.id);
+  saveDiscovered(discovered);
+  UI.toast(`<div class="toast-kicker">${first ? 'New species encountered · added to the encyclopedia' : 'New species encountered'}</div><b>${sp.name}</b><p>${sp.fact}</p>`);
   UI.setLife(world.contemporaries, world.met);
   sound.discover();
 };
@@ -51,14 +56,25 @@ function titleScreen() {
   document.getElementById('hud').hidden = true;
   joystick.show(false);
   sound.duck(1);
+  titleModal();
+}
+
+const attr = (s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+/** The title card itself; also where the encyclopedia returns to, keeping the typed name. */
+function titleModal() {
+  const { found, total } = progress(discovered);
   UI.showModal(`
     <div class="title">
       <h1>LINEAGE</h1>
       <p class="tagline">Every species goes extinct.<br>How long will yours last?</p>
       <label class="name-field">Name your species
-        <span><input id="species-name" value="${game.name}" maxlength="40"><button id="reroll" title="Random name">🎲</button></span>
+        <span><input id="species-name" value="${attr(game.name)}" maxlength="40"><button id="reroll" title="Random name">🎲</button></span>
       </label>
-      <button class="primary" id="start">Begin as a single cell</button>
+      <div class="title-buttons">
+        <button class="primary" id="start">Begin as a single cell</button>
+        <button class="secondary" id="codex">📖 Encyclopedia <small>${found}/${total}</small></button>
+      </div>
       <p class="hint">
         <span class="desktop">Swim, crawl or walk with the joystick or WASD · meet the life of each era · Space/Shift to rise and sink<br>Drag to orbit · scroll to zoom · M to mute</span>
         <span class="touch">Move with the joystick · ▲▼ to rise and sink · meet the life of each era<br>Drag to orbit · pinch to zoom</span>
@@ -67,6 +83,10 @@ function titleScreen() {
     </div>`, {
     buttons: {
       '#reroll': () => { document.getElementById('species-name').value = G.randomSpeciesName(); },
+      '#codex': () => {
+        game.name = document.getElementById('species-name').value.trim() || game.name;
+        openEncyclopedia(discovered, titleModal);
+      },
       '#start': () => {
         game.name = document.getElementById('species-name').value.trim() || game.name;
         UI.hideModal();
