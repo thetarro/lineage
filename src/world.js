@@ -478,7 +478,10 @@ export class World {
     if (!this.onEncounter) return;
     for (const e of this.life) {
       if (this.met.has(e.sp.id)) continue;
-      if (e.obj.position.distanceTo(p.pos) < 2.5 + (e.sp.reach ?? 1) * (e.sp.size ?? 1)) {
+      const d = e.obj.position;
+      // Flyers count as met when they pass overhead, unless you can fly up to them.
+      const dy = e.sp.kind === 'flyer' && !p.flying ? 0 : d.y - p.pos.y;
+      if (Math.hypot(d.x - p.pos.x, dy, d.z - p.pos.z) < 2.5 + (e.sp.reach ?? 1) * (e.sp.size ?? 1)) {
         this.met.add(e.sp.id);
         this.onEncounter(e.sp);
         return;
@@ -546,6 +549,7 @@ export class World {
     for (const p of c.parts.flap) p.rotation.z = p.userData.side * (0.3 + Math.sin(w * 1.4) * 0.35);
     for (const p of c.parts.legs) p.rotation.x = Math.sin(w * 2 + p.userData.offset) * 0.6;
     for (const p of c.parts.wings) p.rotation.z = p.userData.side * Math.sin(w * 2.5) * 0.7;
+    for (const p of c.parts.wingTips) p.rotation.z = Math.sin(w * 2.5 - 0.9) * 0.45; // outer wing trails the flap
     for (const p of c.parts.spin) p.rotation.z += dt * 8;
   }
 
@@ -566,7 +570,7 @@ export class World {
 function buildCreature(g) {
   const tags = g.tags;
   const root = new THREE.Group();
-  const parts = { swing: [], flap: [], legs: [], wings: [], spin: [] };
+  const parts = { swing: [], flap: [], legs: [], wings: [], wingTips: [], spin: [] };
   const line = g.diet?.line;
   const color = new THREE.Color(line ? LINE_COLORS[line] : 0x9fd8c8);
   if (tags.has('camouflage')) color.lerp(new THREE.Color(0x556b2f), 0.4);
@@ -646,8 +650,8 @@ function buildCreature(g) {
     root.add(snout);
   }
 
-  // Tail.
-  if (!tags.has('flight')) {
+  // Tail (feathered flyers get a feather fan instead, below).
+  if (!tags.has('flight') || !tags.has('feathers')) {
     const pivot = new THREE.Group();
     pivot.position.z = -len * 0.45;
     const big = tags.has('fast') ? 1.4 : 1;
@@ -773,24 +777,140 @@ function buildCreature(g) {
         leg.position.y = -legLen / 2;
         pivot.add(leg);
         root.add(pivot);
-        parts.legs.push(pivot);
+        // Flyers tuck their legs back; walkers swing them.
+        if (tags.has('flight')) pivot.rotation.x = 1.2;
+        else parts.legs.push(pivot);
       }
     }
   }
   if (tags.has('flight')) {
-    const wingMat = mat(tags.has('feathers') ? 0xf2efe6 : color.clone().multiplyScalar(0.6), { side: THREE.DoubleSide });
+    const feathered = tags.has('feathers');
     for (const side of [-1, 1]) {
-      const pivot = new THREE.Group();
-      pivot.position.set(side * 0.3, 0.15, 0);
-      pivot.userData.side = side;
-      const wing = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.03, 0.6), wingMat);
-      wing.position.x = side * 0.75;
-      pivot.add(wing);
-      root.add(pivot);
-      parts.wings.push(pivot);
+      const { shoulder, wrist } = buildWing(side, feathered, color);
+      shoulder.position.set(side * 0.3, 0.15, front * 0.2);
+      root.add(shoulder);
+      parts.wings.push(shoulder);
+      parts.wingTips.push(wrist);
+    }
+    if (feathered) {
+      // Fanned tail feathers in place of the usual tail.
+      const tailMat = mat(0xf2efe6, { side: THREE.DoubleSide });
+      for (let i = 0; i < 5; i++) {
+        const f = new THREE.Mesh(featherGeo(0.55, 0.08), tailMat);
+        f.position.set(0, 0.05 + i * 0.003, -len * 0.4);
+        f.rotation.y = (i - 2) * 0.22;
+        root.add(f);
+      }
     }
   }
 
   root.traverse((o) => { o.castShadow = true; });
   return { root, parts, scale, legHeight };
+}
+
+// ── Wings ───────────────────────────────────────────────────────────────
+// Wing parts are modeled for the right side in the xz-plane (+x outward, -z back)
+// and mirrored for the left. Each wing has a shoulder and a wrist joint so the
+// outer half can trail behind the flap.
+
+/** Flat geometry from a 2D shape whose +y points backward. */
+function flatGeo(shape) {
+  const geo = new THREE.ShapeGeometry(shape);
+  geo.rotateX(-Math.PI / 2);
+  return geo;
+}
+
+/** A flight feather pointing backward, with the narrow vane on the leading side. */
+function featherGeo(length, width) {
+  const s = new THREE.Shape();
+  s.moveTo(0, 0);
+  s.quadraticCurveTo(width * 2.2, length * 0.45, 0, length);
+  s.quadraticCurveTo(-width * 1.2, length * 0.4, 0, 0);
+  return flatGeo(s);
+}
+
+/** A tapered bone between two points given in wing-shape coordinates. */
+function bone(parent, material, [x1, y1], [x2, y2], r) {
+  const a = new THREE.Vector3(x1, 0.012, -y1);
+  const b = new THREE.Vector3(x2, 0.012, -y2);
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.6, r, a.distanceTo(b), 5), material);
+  m.position.copy(a).add(b).multiplyScalar(0.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.sub(a).normalize());
+  parent.add(m);
+}
+
+function buildWing(side, feathered, color) {
+  const shoulder = new THREE.Group();
+  shoulder.userData.side = side;
+  const half = new THREE.Group();
+  half.scale.x = side;
+  shoulder.add(half);
+  const wrist = new THREE.Group();
+  wrist.position.x = 0.7;
+  half.add(wrist);
+  const ds = { side: THREE.DoubleSide };
+
+  if (feathered) {
+    const covertMat = mat(color, ds);
+    const quill = mat(0xf2efe6, ds);
+    const tip = mat(0x2e2e36, ds);
+    bone(half, covertMat, [0, -0.02], [0.72, -0.02], 0.05);
+    bone(wrist, covertMat, [0, -0.02], [0.4, 0.02], 0.04);
+    // Coverts: the short feathers layered over the arm and hand.
+    const arm = new THREE.Shape();
+    arm.moveTo(0, -0.06);
+    arm.lineTo(0.72, -0.05);
+    arm.quadraticCurveTo(0.74, 0.12, 0.7, 0.2);
+    arm.quadraticCurveTo(0.35, 0.3, 0, 0.3);
+    const armMesh = new THREE.Mesh(flatGeo(arm), covertMat);
+    armMesh.position.y = 0.02;
+    half.add(armMesh);
+    const hand = new THREE.Shape();
+    hand.moveTo(0, -0.05);
+    hand.lineTo(0.42, 0);
+    hand.quadraticCurveTo(0.3, 0.15, 0, 0.22);
+    const handMesh = new THREE.Mesh(flatGeo(hand), covertMat);
+    handMesh.position.y = 0.02;
+    wrist.add(handMesh);
+    // Secondaries along the arm, primaries fanning from the hand.
+    for (let i = 0; i < 6; i++) {
+      const f = new THREE.Mesh(featherGeo(0.5, 0.07), quill);
+      f.position.set(0.06 + i * 0.12, i * 0.002, 0.05);
+      f.rotation.y = -i * 0.04;
+      half.add(f);
+    }
+    const lengths = [0.55, 0.6, 0.66, 0.72, 0.8, 0.84, 0.78];
+    lengths.forEach((l, i) => {
+      const f = new THREE.Mesh(featherGeo(l, 0.075), i >= 4 ? tip : quill);
+      f.position.set(0.04 + i * 0.055, i * 0.002, 0.02);
+      f.rotation.y = -0.15 - i * 0.18;
+      wrist.add(f);
+    });
+  } else {
+    // Skin stretched over a long arm and fingers, like a bat or a pterosaur.
+    const skin = mat(color.clone().multiplyScalar(0.75), ds);
+    const boneMat = mat(color.clone().multiplyScalar(0.5));
+    bone(half, boneMat, [0, -0.02], [0.7, -0.02], 0.045);
+    const inner = new THREE.Shape();
+    inner.moveTo(0, -0.02);
+    inner.lineTo(0.7, -0.02);
+    inner.lineTo(0.7, 0.45);
+    inner.quadraticCurveTo(0.35, 0.36, 0, 0.6);
+    half.add(new THREE.Mesh(flatGeo(inner), skin));
+    const outer = new THREE.Shape();
+    outer.moveTo(0, -0.02);
+    outer.lineTo(0.9, 0.12);
+    outer.quadraticCurveTo(0.68, 0.2, 0.62, 0.42);
+    outer.quadraticCurveTo(0.32, 0.3, 0, 0.45);
+    wrist.add(new THREE.Mesh(flatGeo(outer), skin));
+    for (const tipPt of [[0.9, 0.12], [0.62, 0.42], [0.25, 0.42]]) bone(wrist, boneMat, [0, -0.02], tipPt, 0.03);
+    const clawMat = mat(0xe8e0c8);
+    for (let i = 0; i < 3; i++) {
+      const claw = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.09, 4), clawMat);
+      claw.position.set(0.02 + i * 0.03, 0.02, 0.06);
+      claw.rotation.x = Math.PI / 2;
+      wrist.add(claw);
+    }
+  }
+  return { shoulder, wrist };
 }
