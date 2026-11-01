@@ -53,6 +53,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .meter.food .meter-fill { background: var(--food); }
 .meter.water .meter-fill { background: var(--water); }
 .meter.oxygen .meter-fill { background: var(--oxygen); }
+.meter.moisture .meter-fill { background: #6fcf8a; transition: width 0.2s linear; }
 .meter.low .meter-value { color: var(--bad); animation: blink 1s infinite; }
 @keyframes blink { 50% { opacity: 0.4; } }
 

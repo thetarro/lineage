@@ -32,6 +32,15 @@ export const FORAGE_CAP = 18;
 // When a hunting predator catches the player it takes this many times the generation's
 // predation share (so Defense and size protect here too), never below the viable minimum.
 export const BITE_SHARE = 0.5;
+
+// Amphibians must keep going back to the water. On land their skin dries, emptying the
+// Moisture meter in DRY_SECONDS (half as fast again with Water Retention); a lake refills
+// it in SOAK_SECONDS. Dried out, they lose DRY_SHARE of the population every DRY_TICK
+// seconds, never below the viable minimum.
+export const DRY_SECONDS = 45;
+export const SOAK_SECONDS = 4;
+export const DRY_TICK = 3;
+export const DRY_SHARE = 0.04;
 export const GENERATIONS_PER_ERA = 2;
 
 export const LINE_COLORS = { carnivore: 0xd9534f, omnivore: 0xe0a030, herbivore: 0x5cb85c };
@@ -156,7 +165,7 @@ export const CHOICES = {
   },
   // Vertebrates can also settle the water's edge, as amphibians.
   amphibian: {
-    name: "Water's Edge", icon: '🏞️', desc: 'Live in both worlds: breathe air on land, but go back to the water to breed.',
+    name: "Water's Edge", icon: '🏞️', desc: 'Live in both worlds: breathe air on land, but your skin dries out. Go back to the water often.',
     traits: { adaptability: 2 }, tags: ['terrestrial', 'amphibian'], removeTags: ['aquatic'],
   },
   tadpoles: {

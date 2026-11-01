@@ -1,7 +1,7 @@
 // DOM overlay: HUD panels, choice cards, modals and the event log.
 
 import { CHOICES, ERAS, TRAIT_NAMES, GENERATIONS_PER_ERA } from './data.js';
-import { carryingCapacity, upcomingEvent, habitat } from './game.js';
+import { carryingCapacity, upcomingEvent, habitat, needsWater } from './game.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -52,6 +52,7 @@ export function renderHUD(g) {
     ${bar('🍖 Food', g.meters.food, 100, 'food')}
     ${bar('💧 Water', g.meters.water, 100, 'water')}
     ${bar('🫁 Oxygen', g.meters.oxygen, 100, 'oxygen')}
+    ${needsWater(g) ? `<div id="moisture" title="Your skin dries out on land. Go back into a lake to wet it.">${bar('🐸 Skin', g.moisture, 100, 'moisture')}</div>` : ''}
     <div id="life">${lifeHTML()}</div>`;
 
   const diet = g.diet
@@ -73,6 +74,15 @@ export function renderHUD(g) {
   const past = g.history.some((h) => h.kind === 'event' && h.era === g.era); // already faced this era's disaster
   warn.hidden = !ev || past || g.status !== 'alive';
   if (ev) warn.innerHTML = `<b>⚠ Signs of change:</b> ${ev.warning}`;
+}
+
+/** Live update of the amphibian Skin meter, without rebuilding the HUD every frame. */
+export function setMoisture(g) {
+  const el = $('moisture')?.firstElementChild;
+  if (!el) return;
+  el.querySelector('.meter-fill').style.width = `${g.moisture}%`;
+  el.querySelector('.meter-value').textContent = Math.round(g.moisture);
+  el.classList.toggle('low', g.moisture < 25);
 }
 
 export function hideWarning() { $('warning').hidden = true; }

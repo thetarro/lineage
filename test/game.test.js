@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as G from '../src/game.js';
-import { CHOICES, ERAS, EVENTS, GENERATIONS_PER_ERA, FORAGE_CAP, MIN_VIABLE_POPULATION } from '../src/data.js';
+import { CHOICES, ERAS, EVENTS, GENERATIONS_PER_ERA, FORAGE_CAP, MIN_VIABLE_POPULATION, DRY_SECONDS, SOAK_SECONDS, DRY_TICK } from '../src/data.js';
 
 /** A game after taking these choices, advancing one era per choice like the fork phase. */
 function lineage(ids) {
@@ -289,6 +289,37 @@ test('a predator catching the player costs population, unless defenses hold', ()
   tiny.population = MIN_VIABLE_POPULATION + 10;
   G.predatorAttack(tiny);
   assert.ok(tiny.population >= MIN_VIABLE_POPULATION, 'a bite never ends the game by itself');
+});
+
+test('amphibians dry out on land and must go back to the water', () => {
+  const g = lineage(['carnivore', 'shell', 'spine', 'amphibian']);
+  assert.ok(G.needsWater(g));
+  const before = g.population;
+  G.skinMoisture(g, DRY_SECONDS / 2, false);
+  assert.ok(Math.abs(g.moisture - 50) < 1e-9, 'half dry after half the time');
+  assert.equal(g.population, before, 'no losses while the skin is still wet');
+  G.skinMoisture(g, DRY_SECONDS, false);
+  assert.equal(g.moisture, 0);
+  const dry = g.population;
+  const r = G.skinMoisture(g, DRY_TICK, false);
+  assert.ok(r.lost > 0 && g.population === dry - r.lost, 'dried out costs population');
+  G.skinMoisture(g, SOAK_SECONDS, true);
+  assert.equal(g.moisture, 100, 'a lake wets the skin again');
+  assert.equal(G.skinMoisture(g, DRY_TICK, false).lost, 0);
+
+  g.population = MIN_VIABLE_POPULATION + 5;
+  g.moisture = 0;
+  for (let i = 0; i < 10; i++) G.skinMoisture(g, DRY_TICK, false);
+  assert.ok(g.population >= MIN_VIABLE_POPULATION, 'drying never ends the game by itself');
+
+  const retains = withChoices(['amphibian', 'waterRetention']);
+  G.skinMoisture(retains, DRY_SECONDS, false);
+  assert.ok(retains.moisture > 0, 'Water Retention slows drying');
+
+  const reptile = withChoices(['amphibian', 'shelledEgg']);
+  assert.ok(!G.needsWater(reptile));
+  G.skinMoisture(reptile, DRY_SECONDS * 2, false);
+  assert.equal(reptile.moisture, 100, 'a shelled egg frees reptiles from the water');
 });
 
 // ── Whole games ────────────────────────────────────────────────────────────

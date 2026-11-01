@@ -115,6 +115,7 @@ export class World {
     this.onHuntStart = null;
     this.onBite = null;
     this.onHuntEnd = null;
+    this.onLand = null; // (dt, inWater) every frame the player roams a land world
     this.swayers = [];
     this.particles = [];
     this.shake = 0;
@@ -296,6 +297,11 @@ export class World {
     this.env.add(lake);
 
     this.addParticles('pollen', 0xfff6c0, 200);
+  }
+
+  /** Whether a spot of a land world is under the lakes' water. */
+  inLake(pos) {
+    return groundHeight(pos.x, pos.z) < WATER_LEVEL;
   }
 
   dryPoint() {
@@ -615,6 +621,7 @@ export class World {
       this.moveFollowers(lead, dt, t);
       this.updateFood(lead, dt, t);
       this.updateHunt(lead, dt, t);
+      if (this.active && !this.aquatic) this.onLand?.(dt, this.inLake(lead.pos));
     }
 
     // Camera travels with the player, keeping the chosen orbit angle.

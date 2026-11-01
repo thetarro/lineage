@@ -64,6 +64,30 @@ world.onHuntEnd = (sp) => {
   UI.log(`💨 Escaped from <b>${sp.name}</b>.`);
 };
 
+// Amphibians must keep going back to the water: their skin dries out on land.
+let skinWarned = false;
+world.onLand = (dt, inWater) => {
+  if (!G.needsWater(game)) return;
+  const before = game.moisture;
+  const r = G.skinMoisture(game, dt, inWater);
+  UI.setMoisture(game);
+  if (before >= 30 && game.moisture < 30) {
+    skinWarned = true;
+    UI.toast('<div class="toast-kicker">💧 Your skin is drying out</div>Get back into the water before it is too late.', 4000);
+    sound.danger();
+  } else if (before > 0 && game.moisture === 0) {
+    UI.toast('<div class="toast-kicker">☀️ Dried out</div>Your kind are dying on land. Find a lake, now!', 4000);
+  } else if (skinWarned && inWater && game.moisture === 100) {
+    skinWarned = false;
+    UI.toast('💦 Back in the water: your skin is wet again.', 2500);
+  }
+  if (r.lost) {
+    UI.renderHUD(game);
+    UI.log(`☀️ Dried out on land: <span class="bad">-${UI.fmtPop(r.lost)}</span>.`);
+    sound.bite();
+  }
+};
+
 // Browsers only allow audio after a user gesture.
 const unlockAudio = () => { sound.start(); sound.setTheme(world.themeKey); };
 window.addEventListener('pointerdown', unlockAudio, { once: true });
@@ -166,6 +190,10 @@ function startEra() {
       sound.evolve();
       UI.renderHUD(game);
       UI.banner(`${c.icon} ${c.name}`);
+      if (id === 'amphibian') {
+        UI.toast('<div class="toast-kicker">🐸 Keep your skin wet</div>Your skin dries out on land. Go back into a lake before the Skin meter runs dry.', 7000);
+        UI.log('🐸 Your skin dries out on land: go back into a lake before the <b>Skin</b> meter runs dry.');
+      }
       world.active = true;
       livePhase();
     },
