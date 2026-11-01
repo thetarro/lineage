@@ -3,6 +3,7 @@
 import {
   START, CHOICES, ERAS, EVENTS, DESCENDANTS, MIN_VIABLE_POPULATION, GENERATIONS_PER_ERA,
   TIER_EFFICIENCY, OMNIVORE_EFFICIENCY, PRESENT_DAY_MYA, PREDATION, PREDATION_SAFE, FORAGE_BITE, FORAGE_CAP, BITE_SHARE,
+  DRY_SECONDS, SOAK_SECONDS, DRY_TICK, DRY_SHARE,
 } from './data.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -30,6 +31,8 @@ export function createGame({ name, rng = Math.random } = {}) {
     tags: new Set(START.tags),
     diet: null,
     foraged: 0, // food collected by hand this generation
+    moisture: 100, // amphibians' skin, drying out on land in real time
+    dryFor: 0, // seconds spent dried out since the last loss
     world: { shock: {}, oxygen: 1, wetness: 1 },
     history: [],
     status: 'alive', // alive | extinct | survived
@@ -41,6 +44,8 @@ export function createGame({ name, rng = Math.random } = {}) {
 
 export const habitat = (g) => (g.tags.has('terrestrial') ? 'terrestrial' : 'aquatic');
 export const dietLine = (g) => g.diet?.line ?? null;
+/** Amphibians must keep returning to the water (a shelled egg frees reptiles from it). */
+export const needsWater = (g) => g.tags.has('amphibian');
 export const currentEra = (g) => ERAS[g.era];
 export const upcomingEvent = (g) => (ERAS[g.era]?.event ? EVENTS[ERAS[g.era].event] : null);
 
@@ -155,6 +160,7 @@ export function applyChoice(g, id, kind) {
   for (const t of c.tags ?? []) g.tags.add(t);
   g.tags.add(id);
   if (c.removeTags?.includes('aquatic')) leaveWater(g);
+  if (id === 'amphibian') g.moisture = 100;
   if (c.diet) adoptDiet(g, c);
   g.history.push({ era: g.era, mya: g.mya, kind, id, name: c.name, icon: c.icon });
   return c;
@@ -263,6 +269,28 @@ export function predatorAttack(g) {
   return { lost, blocked: share === 0 };
 }
 
+/**
+ * Real time passing for an amphibian, on land or in a lake: the skin dries out or soaks up
+ * water again. Once dried out it costs population now and then, but never ends the game.
+ */
+export function skinMoisture(g, dt, inWater) {
+  if (!needsWater(g) || g.status !== 'alive') return { lost: 0 };
+  if (inWater) {
+    g.moisture = Math.min(100, g.moisture + (100 * dt) / SOAK_SECONDS);
+    g.dryFor = 0;
+    return { lost: 0 };
+  }
+  const seconds = DRY_SECONDS * (g.tags.has('waterRetention') ? 1.5 : 1);
+  g.moisture = Math.max(0, g.moisture - (100 * dt) / seconds);
+  if (g.moisture > 0) return { lost: 0 };
+  g.dryFor += dt;
+  if (g.dryFor < DRY_TICK) return { lost: 0 };
+  g.dryFor -= DRY_TICK;
+  const lost = Math.max(0, Math.min(Math.round(g.population * DRY_SHARE), g.population - MIN_VIABLE_POPULATION));
+  g.population -= lost;
+  return { lost };
+}
+
 function starvationCause(g) {
   const m = g.meters;
   const worst = Object.entries(m).sort((a, b) => a[1] - b[1])[0][0];
@@ -315,6 +343,8 @@ export function resolveEvent(g) {
 export function advanceEra(g) {
   g.era += 1;
   g.generation = 0;
+  g.moisture = 100; // each era starts fresh from the water
+  g.dryFor = 0;
   if (g.era >= ERAS.length) {
     g.status = 'survived';
     g.mya = PRESENT_DAY_MYA;
