@@ -63,9 +63,9 @@ function shark(m) {
  * A four-legged body: w/h/l are the body's width/height/length, y its center height
  * (and so the leg length). Returns the group and the head position to decorate.
  */
-function quadruped(m, { w, h, l, y, legR = 0.06, head = w * 0.6, headY = h * 0.15, tail = l * 0.8, legM = m }) {
+function quadruped(m, { w, h, l, y, legR = 0.06, head = w * 0.6, headY = h * 0.15, headZ = l * 0.5 + head * 0.3, tail = l * 0.8, legM = m }) {
   const g = new THREE.Group();
-  const hd = [0, y + headY, l * 0.5 + head * 0.3];
+  const hd = [0, y + headY, headZ];
   part(g, sphere(0.5, 10, 6), m, [0, y, 0], [0, 0, 0], [w, h, l]);
   part(g, sphere(0.5, 8, 6), m, hd, [0, 0, 0], [head, head * 0.8, head * 1.3]);
   if (tail) part(g, cone(w * 0.22, tail, 5), m, [0, y, -l * 0.5 - tail * 0.35], [-PI / 2 - 0.1, 0, 0]);
@@ -754,8 +754,8 @@ const B = {
   },
   stegosaurus() {
     const m = mat(0x6a7a4a), plate = mat(0xb06a3a), spike = mat(0xe8dcc0);
-    const { g, head } = quadruped(m, { w: 1, h: 0.95, l: 2, y: 1.2, legR: 0.16, head: 0.35, headY: -0.4, tail: 1.6 });
-    part(g, cyl(0.14, 0.28, 0.6, 6), m, [0, 1.0, 0.95], [1.95, 0, 0]); // neck down to the low-slung head
+    const { g, head } = quadruped(m, { w: 1, h: 0.95, l: 2, y: 1.2, legR: 0.16, head: 0.35, headY: -0.05, headZ: 1.45, tail: 1.6 });
+    part(g, cyl(0.14, 0.28, 0.65, 6), m, [0, 1.17, 1.15], [1.66, 0, 0]); // neck reaching forward to the head
     for (let i = 0; i < 9; i++) {
       const t = i / 8 - 0.5, z = t * 1.8;
       const top = 1.2 + 0.475 * Math.sqrt(1 - z * z);

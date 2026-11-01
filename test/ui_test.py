@@ -22,6 +22,8 @@ ROOT = Path(__file__).resolve().parent.parent
 # Software WebGL, so the tests also run on machines without a GPU.
 CHROMIUM_ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']
 failures = []
+failed_requests = []
+page_errors = []
 
 
 def check(ok, message):
@@ -41,9 +43,19 @@ def visible(page, selector):
     return el is not None and el.is_visible()
 
 
+def load(page, url, selector='#start'):
+    """Open the game and wait for the title screen; explain what went wrong if it never shows."""
+    failed_requests.clear()
+    page.goto(url)
+    try:
+        page.wait_for_selector(selector, timeout=20000)
+    except Exception:
+        raise RuntimeError(f'the title screen did not load. Failed requests: {failed_requests or "none"}. Page errors: {page_errors or "none"}')
+
+
 def play(page, url, want=(), stop_at=None):
     """Play one game, preferring the choices in `want`. Returns the eras seen and the outcome."""
-    page.goto(url)
+    load(page, url)
     page.click('#start')
     eras = []
     for _ in range(600):
@@ -83,12 +95,12 @@ def main():
         with sync_playwright() as p:
             browser = p.chromium.launch(args=CHROMIUM_ARGS)
             page = browser.new_context(viewport={'width': 1100, 'height': 800}).new_page()
-            errors = []
+            errors = page_errors
             page.on('pageerror', lambda e: errors.append(str(e)))
+            page.on('requestfailed', lambda r: failed_requests.append(f'{r.url} ({r.failure})'))
 
             print('Title screen')
-            page.goto(url)
-            page.wait_for_selector('#start', timeout=20000)
+            load(page, url)
             check(page.inner_text('.version') == f'v{version}', f'shows v{version}')
             check('0/' in page.inner_text('#codex'), 'encyclopedia starts with nothing discovered')
 
@@ -115,8 +127,7 @@ def main():
             check(len(found) > 0, f'swimming around discovers species ({", ".join(found) or "none"})')
 
             print('Encyclopedia, after a reload')
-            page.goto(url)
-            page.wait_for_selector('#codex')
+            load(page, url, '#codex')
             page.click('#codex')
             page.wait_for_selector('.codex')
             check(page.locator('.codex-tile[data-id]').count() == len(found), 'discoveries are remembered')
@@ -143,8 +154,7 @@ def main():
 
             print('Phone layout')
             page.set_viewport_size({'width': 390, 'height': 844})
-            page.goto(url)
-            page.wait_for_selector('#codex')
+            load(page, url, '#codex')
             overflow = "document.documentElement.scrollWidth > innerWidth || document.querySelector('#modal-content').scrollWidth > document.querySelector('#modal-content').clientWidth"
             check(not page.evaluate(overflow), 'title screen fits without sideways scrolling')
             page.click('#codex')

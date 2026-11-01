@@ -2,6 +2,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { LINE_COLORS } from './data.js';
 import { SPECIES, lifeFor } from './fauna.js';
 
@@ -625,6 +626,7 @@ function buildCreature(g) {
   const color = new THREE.Color(line ? LINE_COLORS[line] : 0x9fd8c8);
   if (tags.has('camouflage')) color.lerp(new THREE.Color(0x556b2f), 0.4);
   if (tags.has('fur')) color.lerp(new THREE.Color(0x8b5a2b), 0.6);
+  if (tags.has('feathers')) color.lerp(new THREE.Color(0xc9955a), 0.3);
   if (tags.has('deepSea')) color.lerp(new THREE.Color(0x553366), 0.35);
   if (tags.has('coldBlooded')) color.lerp(new THREE.Color(0x4a7a4a), 0.3);
 
@@ -702,8 +704,10 @@ function buildCreature(g) {
   }
 
   // Tail (feathered flyers and sea arthropods get a fan instead, below).
+  let tailPivot = null;
   if (!seaArthropod && (!tags.has('flight') || !tags.has('feathers'))) {
     const pivot = new THREE.Group();
+    tailPivot = pivot;
     pivot.position.z = -len * 0.45;
     const big = tags.has('fast') ? 1.4 : 1;
     const tail = land
@@ -775,24 +779,8 @@ function buildCreature(g) {
       root.add(spike);
     }
   }
-  if (tags.has('fur')) {
-    const tuftMat = mat(0x6b4423);
-    for (let i = 0; i < 8; i++) {
-      const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.18, 4), tuftMat);
-      tuft.position.set(rand(-0.2, 0.2), 0.33, rand(-len * 0.35, len * 0.3));
-      tuft.rotation.set(rand(-0.4, 0.4), 0, rand(-0.4, 0.4));
-      root.add(tuft);
-    }
-  }
-  if (tags.has('feathers')) {
-    const crestMat = mat(0xffc93c);
-    for (let i = 0; i < 3; i++) {
-      const crest = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.3, 3), crestMat);
-      crest.position.set(0, 0.36, front - 0.15 - i * 0.1);
-      crest.rotation.x = -0.5;
-      root.add(crest);
-    }
-  }
+  if (tags.has('fur')) addFur(root, tailPivot && land ? tailPivot : null, { len, front, color });
+  if (tags.has('feathers')) addFeathers(root, tags.has('flight') ? null : tailPivot, { len, front, color, flying: tags.has('flight') });
   if (tags.has('bioluminescence')) {
     const glowMat = new THREE.MeshStandardMaterial({ color: 0x66ffee, emissive: 0x66ffee, emissiveIntensity: 3 });
     const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.6, 4), mat(color));
@@ -879,6 +867,131 @@ function buildCreature(g) {
 
   root.traverse((o) => { o.castShadow = true; });
   return { root, parts, scale, legHeight };
+}
+
+// ── Coats ───────────────────────────────────────────────────────────────
+// Fur and feathers are many small pieces, merged into one mesh per color to stay cheap
+// when a whole herd or flock is on screen.
+
+const UP = new THREE.Vector3(0, 1, 0);
+const BODY = { rx: 0.4, ry: 0.35 }; // the body ellipsoid's half-width and half-height (half-length is len / 2)
+
+/** Points in rows over the top and flanks of the body, with outward normals. */
+function coatPoints(len, rows, perRow, spread) {
+  const rz = len * 0.5;
+  const out = [];
+  for (let i = 0; i < rows; i++) {
+    const z = rz * (0.8 - (1.65 * i) / (rows - 1));
+    const s = Math.sqrt(1 - (z / rz) ** 2);
+    for (let j = 0; j < perRow; j++) {
+      const a = -spread + (2 * spread * (j + (i % 2) * 0.5)) / perRow;
+      const pos = new THREE.Vector3(BODY.rx * s * Math.sin(a), BODY.ry * s * Math.cos(a), z);
+      const normal = new THREE.Vector3(pos.x / BODY.rx ** 2, pos.y / BODY.ry ** 2, z / rz ** 2).normalize();
+      out.push({ pos, normal, row: i });
+    }
+  }
+  return out;
+}
+
+/** Place a copy of `geo` at `pos`, turned so its +y points along `dir`. */
+function placed(geo, pos, dir, scale = 1) {
+  const m = new THREE.Matrix4().compose(pos, new THREE.Quaternion().setFromUnitVectors(UP, dir.clone().normalize()), new THREE.Vector3().setScalar(scale));
+  return geo.clone().applyMatrix4(m);
+}
+
+/** One mesh from many placed pieces (which are then freed). Pieces may mix indexed and non-indexed shapes. */
+function merged(pieces, material) {
+  const flat = pieces.map((p) => (p.index ? p.toNonIndexed() : p));
+  const mesh = new THREE.Mesh(mergeGeometries(flat), material);
+  new Set([...pieces, ...flat]).forEach((p) => p.dispose());
+  return mesh;
+}
+
+/** A shaggy two-tone coat swept backward, a ruff behind the head and a bushy tail. */
+function addFur(root, tail, { len, front, color }) {
+  // The coat: soft puffs, longer front to back, overlapping like a woolly fleece.
+  const puff = new THREE.IcosahedronGeometry(0.1, 0);
+  puff.scale(1, 0.55, 1.5);
+  const back = new THREE.Vector3(0, 0, -1);
+  const dark = [], light = [];
+  for (const [i, { pos, normal }] of coatPoints(len, 12, 10, 2.2).entries()) {
+    (i % 3 ? dark : light).push(placed(puff, pos, normal, rand(0.9, 1.25)));
+  }
+  puff.dispose();
+  // Locks of hair for the ruff and the tail: flattened cones swept back.
+  const tuft = new THREE.ConeGeometry(0.09, 0.17, 5);
+  tuft.translate(0, 0.07, 0); // grow from the base
+  tuft.scale(0.45, 1, 1);
+  for (let k = 0; k < 11; k++) {
+    const a = -2.3 + k * 0.46;
+    const pos = new THREE.Vector3(Math.sin(a) * 0.36, Math.cos(a) * 0.31, front * 0.55);
+    dark.push(placed(tuft, pos, new THREE.Vector3(Math.sin(a), Math.cos(a), -1.2), 1.5));
+  }
+  root.add(merged(dark, mat(color.clone().multiplyScalar(0.72))), merged(light, mat(color.clone().lerp(new THREE.Color(0xffffff), 0.15))));
+  tuft.dispose();
+  if (!tail) return;
+  // Along the land tail (a cone from z = 0.05 to -0.85 in its pivot), ending in a brush.
+  const brush = new THREE.ConeGeometry(0.07, 0.24, 4);
+  brush.translate(0, 0.1, 0);
+  const tailTufts = [];
+  for (let t = 0; t < 6; t++) {
+    const z = -0.1 - t * 0.13;
+    const r = 0.14 * (0.85 + z) / 0.9;
+    for (let k = 0; k < 4; k++) {
+      const a = k * (Math.PI / 2) + t * 0.6;
+      tailTufts.push(placed(brush, new THREE.Vector3(Math.sin(a) * r, Math.cos(a) * r, z), new THREE.Vector3(Math.sin(a), Math.cos(a), -1.2), 1.1));
+    }
+  }
+  tailTufts.push(placed(brush, new THREE.Vector3(0, 0, -0.82), back, 1.6));
+  tail.add(merged(tailTufts, mat(color.clone().multiplyScalar(0.72))));
+  brush.dispose();
+}
+
+/** Overlapping contour feathers, a crest, folded wings and (on the ground) a tail fan. */
+function addFeathers(root, tail, { len, front, color, flying }) {
+  const ds = { side: THREE.DoubleSide };
+  // Rounded contour feathers lying back along the body, overlapping like roof tiles, with
+  // their tips lifted a little so the plumage looks soft.
+  const shape = new THREE.Shape();
+  shape.moveTo(0, 0);
+  shape.quadraticCurveTo(0.13, 0.12, 0, 0.3);
+  shape.quadraticCurveTo(-0.13, 0.12, 0, 0);
+  const contour = flatGeo(shape);
+  contour.rotateX(0.3);
+  const rows = [[], []];
+  for (const { pos, normal, row } of coatPoints(len, 11, 9, 1.95)) rows[row % 2].push(placed(contour, pos.clone().addScaledVector(normal, 0.01), normal));
+  contour.dispose();
+  root.add(merged(rows[0], mat(color.clone().multiplyScalar(0.92), ds)), merged(rows[1], mat(color.clone().lerp(new THREE.Color(0xffffff), 0.08), ds)));
+
+  // A fan of crest feathers standing up on the head, sweeping back.
+  const crestMat = mat(0xffc93c, ds);
+  for (let k = 0; k < 4; k++) {
+    const crest = new THREE.Mesh(featherGeo(0.32 - k * 0.04, 0.07), crestMat);
+    crest.position.set(0, 0.3, front - 0.12 - k * 0.05);
+    crest.rotation.set(1.25 - k * 0.22, 0, Math.PI / 2);
+    root.add(crest);
+  }
+  if (flying) return; // flyers have real wings and a tail fan already
+
+  // Folded wings: layered long feathers lying along each flank.
+  const quill = mat(0xf2efe6, ds);
+  const wingTip = mat(color.clone().multiplyScalar(0.55), ds);
+  for (const side of [-1, 1]) {
+    for (let k = 0; k < 4; k++) {
+      const f = new THREE.Mesh(featherGeo(0.5 - k * 0.06, 0.08), k === 0 ? wingTip : quill);
+      f.position.set(side * (0.37 - k * 0.01), 0.08 - k * 0.04, front * 0.25 - k * 0.04);
+      f.rotation.set(0.12 + k * 0.08, 0, side * (Math.PI / 2 - 0.25));
+      root.add(f);
+    }
+  }
+  if (!tail) return;
+  // Tail fan at the tip of the tail (which ends at z = -0.85 in its pivot).
+  for (let i = 0; i < 5; i++) {
+    const f = new THREE.Mesh(featherGeo(0.5, 0.08), i % 2 ? quill : wingTip);
+    f.position.set(0, 0.02 + i * 0.004, -0.55);
+    f.rotation.y = (i - 2) * 0.24;
+    tail.add(f);
+  }
 }
 
 /**
