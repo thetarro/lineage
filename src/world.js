@@ -599,6 +599,7 @@ export class World {
     for (const p of c.parts.wings) p.rotation.z = p.userData.side * Math.sin(w * 2.5) * 0.7;
     for (const p of c.parts.wingTips) p.rotation.z = Math.sin(w * 2.5 - 0.9) * 0.45; // outer wing trails the flap
     for (const p of c.parts.spin) p.rotation.z += dt * 8;
+    for (const p of c.parts.flick) p.rotation.x = Math.sin(w * 1.6) * 0.3;
   }
 
   clear(group) {
@@ -618,7 +619,7 @@ export class World {
 function buildCreature(g) {
   const tags = g.tags;
   const root = new THREE.Group();
-  const parts = { swing: [], flap: [], legs: [], wings: [], wingTips: [], spin: [] };
+  const parts = { swing: [], flap: [], legs: [], wings: [], wingTips: [], spin: [], flick: [] };
   const line = g.diet?.line;
   const color = new THREE.Color(line ? LINE_COLORS[line] : 0x9fd8c8);
   if (tags.has('camouflage')) color.lerp(new THREE.Color(0x556b2f), 0.4);
@@ -660,6 +661,7 @@ function buildCreature(g) {
   }
 
   const land = tags.has('terrestrial');
+  const seaArthropod = tags.has('exoskeleton') && !land; // built like a crustacean, below
   const len = 1 + (tags.has('spine') ? 0.6 : 0) + (tags.has('fast') ? 0.3 : 0) + (tags.has('exoskeleton') ? 0.2 : 0);
   const bodyMat = mat(color);
   const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 8), bodyMat);
@@ -698,8 +700,8 @@ function buildCreature(g) {
     root.add(snout);
   }
 
-  // Tail (feathered flyers get a feather fan instead, below).
-  if (!tags.has('flight') || !tags.has('feathers')) {
+  // Tail (feathered flyers and sea arthropods get a fan instead, below).
+  if (!seaArthropod && (!tags.has('flight') || !tags.has('feathers'))) {
     const pivot = new THREE.Group();
     pivot.position.z = -len * 0.45;
     const big = tags.has('fast') ? 1.4 : 1;
@@ -721,7 +723,7 @@ function buildCreature(g) {
   }
 
   // Armor.
-  if (tags.has('shell')) {
+  if (tags.has('shell') && !seaArthropod) {
     const shell = new THREE.Mesh(
       new THREE.SphereGeometry(0.55, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2),
       mat(tags.has('pressureArmor') ? 0x3c3c48 : 0xc9a66b),
@@ -732,21 +734,26 @@ function buildCreature(g) {
   }
   if (tags.has('exoskeleton')) {
     const ringMat = mat(color.clone().multiplyScalar(0.55));
-    for (let i = 0; i < 3; i++) {
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.37, 0.05, 5, 12), ringMat);
-      ring.position.z = (i - 1) * len * 0.25;
-      root.add(ring);
+    if (land) {
+      for (let i = 0; i < 3; i++) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.37, 0.05, 5, 12), ringMat);
+        ring.position.z = (i - 1) * len * 0.25;
+        root.add(ring);
+      }
+    } else {
+      addSeaArthropod(root, parts, { len, front, color, line, tags });
     }
     for (const side of [-1, 1]) {
-      // Arachnids have grasping pedipalps where insects have antennae.
+      // Arachnids have grasping pedipalps where insects have antennae; sea arthropods have long ones.
       const arachnid = tags.has('arachnid');
-      const feeler = new THREE.Mesh(new THREE.CylinderGeometry(arachnid ? 0.03 : 0.015, 0.015, arachnid ? 0.35 : 0.8, 4), ringMat);
-      feeler.position.set(side * 0.12, arachnid ? -0.05 : 0.3, front + (arachnid ? 0.15 : 0.2));
-      feeler.rotation.set(arachnid ? 1.3 : 0.9, 0, side * -0.4);
+      const feelerLen = arachnid ? 0.35 : land ? 0.8 : 1.2;
+      const feeler = new THREE.Mesh(new THREE.CylinderGeometry(arachnid ? 0.03 : 0.015, 0.012, feelerLen, 4), ringMat);
+      feeler.position.set(side * 0.12, arachnid ? -0.05 : 0.3, front + (arachnid ? 0.15 : land ? 0.2 : 0.3));
+      feeler.rotation.set(arachnid ? 1.3 : land ? 0.9 : 1.15, 0, side * -0.4);
       root.add(feeler);
     }
   }
-  if (tags.has('pressureArmor') && !tags.has('shell')) {
+  if (tags.has('pressureArmor') && !tags.has('shell') && !seaArthropod) {
     for (let i = 0; i < 4; i++) {
       const plate = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.08, 0.3), mat(0x3c3c48));
       plate.position.set(0, 0.32, (i - 1.5) * 0.3);
@@ -803,7 +810,7 @@ function buildCreature(g) {
   // Locomotion: fins in water, legs on land, wings in the air.
   let legHeight = 0.35;
   if (!land) {
-    for (const side of [-1, 1]) {
+    for (const side of seaArthropod ? [] : [-1, 1]) {
       const pivot = new THREE.Group();
       pivot.position.set(side * 0.35, -0.05, front * 0.3);
       pivot.userData.side = side;
@@ -871,6 +878,128 @@ function buildCreature(g) {
 
   root.traverse((o) => { o.castShadow = true; });
   return { root, parts, scale, legHeight };
+}
+
+/**
+ * Sea arthropods are built like crustaceans: overlapping back plates (a broad head shield
+ * with a shell), paddle legs that beat in a wave, jointed walking legs, a flicking tail fan,
+ * short antennules and, for carnivores, a pair of claws.
+ */
+function addSeaArthropod(root, parts, { len, front, color, line, tags }) {
+  const half = len * 0.5;
+  const armor = mat(tags.has('pressureArmor') ? 0x3c3c48 : color.clone().multiplyScalar(0.55));
+  const limbMat = mat(color.clone().multiplyScalar(0.7));
+  const dome = new THREE.SphereGeometry(0.5, 12, 4, 0, Math.PI * 2, 0, Math.PI / 2);
+
+  // Back plates, shrinking with the body's taper.
+  for (let i = 0; i < 6; i++) {
+    const z = half * 0.75 - (i / 5) * half * 1.55;
+    const taper = Math.sqrt(Math.max(0.2, 1 - (z / half) ** 2));
+    const plate = new THREE.Mesh(dome, armor);
+    plate.scale.set(0.86 * taper, 0.8 * taper, len * 0.2);
+    plate.position.z = z;
+    root.add(plate);
+  }
+  if (tags.has('shell')) {
+    // A broad head shield, like a trilobite's or a horseshoe crab's, stopping short of the eyes.
+    const shield = new THREE.Mesh(dome, mat(tags.has('pressureArmor') ? 0x3c3c48 : 0xc9a66b));
+    shield.scale.set(1.25, 0.9, len * 0.6);
+    shield.position.set(0, -0.02, len * 0.05);
+    root.add(shield);
+  }
+
+  // Paddle legs under the belly; a wave of strokes runs from front to back.
+  for (let k = 0; k < 5; k++) {
+    for (const side of [-1, 1]) {
+      const pivot = new THREE.Group();
+      pivot.position.set(side * 0.18, -0.26, half * 0.35 - k * half * 0.3);
+      pivot.rotation.z = side * 0.3;
+      pivot.userData.offset = k * 0.8;
+      const paddle = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.24, 0.12), limbMat);
+      paddle.position.y = -0.12;
+      pivot.add(paddle);
+      root.add(pivot);
+      parts.legs.push(pivot);
+    }
+  }
+
+  // Jointed walking legs, splayed out and bent down at the knee.
+  const legGeo = new THREE.CylinderGeometry(0.03, 0.022, 0.32, 5);
+  for (let k = 0; k < 3; k++) {
+    for (const side of [-1, 1]) {
+      const hip = new THREE.Group();
+      hip.position.set(side * 0.3, -0.12, half * 0.5 - k * half * 0.25);
+      hip.rotation.set(0, side * (0.35 - k * 0.35), side * 1.0);
+      const upper = new THREE.Mesh(legGeo, limbMat);
+      upper.position.y = -0.16;
+      const knee = new THREE.Group();
+      knee.position.y = -0.32;
+      knee.rotation.z = -side * 1.3;
+      const lower = new THREE.Mesh(legGeo, limbMat);
+      lower.position.y = -0.16;
+      knee.add(lower);
+      hip.add(upper, knee);
+      root.add(hip);
+    }
+  }
+
+  // Short antennules beside the long antennae.
+  for (const side of [-1, 1]) {
+    const antennule = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.01, 0.35, 4), armor);
+    antennule.position.set(side * 0.07, 0.12, front + 0.12);
+    antennule.rotation.set(1.2, 0, side * -0.6);
+    root.add(antennule);
+  }
+
+  if (line === 'carnivore') {
+    for (const side of [-1, 1]) {
+      const arm = new THREE.Group();
+      arm.position.set(side * 0.28, -0.1, front - 0.1);
+      arm.rotation.y = side * 0.35;
+      const fore = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.035, 0.4, 5), limbMat);
+      fore.rotation.x = Math.PI / 2;
+      fore.position.z = 0.2;
+      const palm = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), armor);
+      palm.scale.set(0.8, 0.6, 1.4);
+      palm.position.z = 0.45;
+      arm.add(fore, palm);
+      for (const jaw of [1, -1]) {
+        const finger = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.24, 4), armor);
+        finger.position.set(0, jaw * 0.035, 0.62);
+        finger.rotation.x = Math.PI / 2 - jaw * 0.25; // slightly open pincer
+        arm.add(finger);
+      }
+      root.add(arm);
+    }
+  }
+
+  // Tail fan: a central telson between two pairs of paddles, flicking up and down.
+  const fan = new THREE.Group();
+  fan.position.z = -half * 0.92;
+  fan.scale.setScalar(tags.has('fast') ? 1.4 : 1);
+  const fanMat = mat(color.clone().multiplyScalar(0.55), { side: THREE.DoubleSide });
+  const telson = new THREE.Shape();
+  telson.moveTo(-0.07, 0);
+  telson.lineTo(0.07, 0);
+  telson.lineTo(0.04, 0.42);
+  telson.lineTo(-0.04, 0.42);
+  fan.add(new THREE.Mesh(flatGeo(telson), tags.has('venom') ? mat(0xb050ff, { side: THREE.DoubleSide }) : fanMat));
+  const uropod = new THREE.Shape();
+  uropod.moveTo(0, 0);
+  uropod.quadraticCurveTo(0.22, 0.2, 0.08, 0.4);
+  uropod.quadraticCurveTo(-0.02, 0.22, 0, 0);
+  const uropodGeo = flatGeo(uropod);
+  for (const side of [-1, 1]) {
+    for (const spread of [0.15, 0.55]) {
+      const paddle = new THREE.Mesh(uropodGeo, fanMat);
+      paddle.scale.x = side;
+      paddle.position.set(side * 0.05, 0.005, 0);
+      paddle.rotation.y = -side * spread * 0.5;
+      fan.add(paddle);
+    }
+  }
+  root.add(fan);
+  parts.flick.push(fan);
 }
 
 // ── Wings ───────────────────────────────────────────────────────────────
