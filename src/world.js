@@ -746,7 +746,8 @@ export class World {
     c.root.scale.setScalar(c.scale * Math.max(0.05, c.grow) * bounce);
     c.root.position.copy(c.pos);
     const look = new THREE.Vector3(c.dir.x, vertical ? Math.max(-0.6, Math.min(0.6, c.dir.y)) : 0, c.dir.z);
-    if (look.lengthSq() > 1e-4) c.root.lookAt(c.pos.clone().add(look));
+    // Cephalopods swim mantle-first, with their arms trailing behind, so they face away from where they go.
+    if (look.lengthSq() > 1e-4) c.root.lookAt(c.pos.clone()[c.backward ? 'sub' : 'add'](look));
 
     c.anim += dt * (3 + c.speed) * c.moving;
     const w = c.anim + c.phase;
@@ -1110,7 +1111,7 @@ function buildCreature(g) {
   }
 
   root.traverse((o) => { o.castShadow = true; });
-  return { root, parts, scale, legHeight };
+  return { root, parts, scale, legHeight, backward: cephalopod };
 }
 
 // ── Cephalopods ─────────────────────────────────────────────────────────
