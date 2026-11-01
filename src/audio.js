@@ -206,6 +206,12 @@ export class Sound {
         this.wind(t, 4, 0.35);
         for (let i = 0; i < 9; i++) this.tone(t + 0.4 + i * 0.35, midi(pick([84, 86, 88, 91, 93, 96])), 2, { gain: 0.06 });
         break;
+      case 'ordovicianIce':
+        // Cold wind over a slow falling drone: the seas draining away.
+        this.wind(t, 4, 0.25);
+        this.tone(t + 0.3, 196, 3.6, { gain: 0.07, freqEnd: 98, attack: 0.8 });
+        for (let i = 0; i < 5; i++) this.tone(t + 0.6 + i * 0.6, midi(pick([79, 81, 84, 88])), 1.6, { gain: 0.05 });
+        break;
       case 'oceanAnoxia':
         for (const n of [33, 33.4, 40]) this.tone(t, midi(n), 4, { type: 'sawtooth', gain: 0.08, attack: 1.5 });
         for (let i = 0; i < 6; i++) this.noise(t + rand(0.3, 3), 0.5, { freq: 180, gain: 0.35, attack: 0.1 });

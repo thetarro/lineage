@@ -26,6 +26,7 @@ const THEMES = {
 const EVENT_LOOKS = {
   greatOxidation: { bg: 0x8a3e16, near: 4, far: 30, particles: 'bubbles', color: 0xff9a50 },
   snowball: { bg: 0xd8ecf6, near: 4, far: 28, particles: 'snow', color: 0xffffff, ice: true },
+  ordovicianIce: { bg: 0x9fbfd0, near: 5, far: 32, particles: 'snow', color: 0xe8f4ff, ice: true },
   oceanAnoxia: { bg: 0x2b1838, near: 2, far: 22, particles: 'murk', color: 0x8a50a0 },
   greatDying: { bg: 0x5a1208, near: 4, far: 30, particles: 'ash', color: 0x666666, shake: 0.15 },
   meteor: { bg: 0x2e2a28, near: 3, far: 26, particles: 'ash', color: 0x888888, meteor: true },

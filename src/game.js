@@ -2,7 +2,7 @@
 
 import {
   START, CHOICES, ERAS, EVENTS, MIN_VIABLE_POPULATION, GENERATIONS_PER_ERA,
-  TIER_EFFICIENCY, OMNIVORE_EFFICIENCY, PRESENT_DAY_MYA,
+  TIER_EFFICIENCY, OMNIVORE_EFFICIENCY, PRESENT_DAY_MYA, PREDATION, PREDATION_SAFE,
 } from './data.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -42,6 +42,13 @@ export const habitat = (g) => (g.tags.has('terrestrial') ? 'terrestrial' : 'aqua
 export const dietLine = (g) => g.diet?.line ?? null;
 export const currentEra = (g) => ERAS[g.era];
 export const upcomingEvent = (g) => (ERAS[g.era]?.event ? EVENTS[ERAS[g.era].event] : null);
+
+/** Share of the population lost to predators each generation: defense and size protect. */
+export function predation(g) {
+  if (g.era === 0) return 0;
+  const protection = g.traits.defense + g.traits.size / 2;
+  return PREDATION * clamp(1 - protection / PREDATION_SAFE, 0, 1);
+}
 
 export function carryingCapacity(g) {
   const swarm = g.tags.has('swarm') ? 1.8 : 1;
@@ -105,9 +112,10 @@ function shuffle(arr, rng) {
 export function foodBaseline(g) {
   const e = g.era;
   if (habitat(g) === 'aquatic') {
+    const reef = g.tags.has('reef') ? 1.3 : 1; // the crowded reefs teem with food
     return {
-      plankton: 1, plants: e === 0 ? 0.8 : 1, prey: 0.6 + 0.08 * e, carrion: 0.5,
-      detritus: 0.8, shellfish: e >= 1 ? 0.8 : 0, insects: 0, seeds: 0, fruit: 0, nectar: 0,
+      plankton: reef, plants: (e === 0 ? 0.8 : 1) * reef, prey: (0.6 + 0.08 * e) * reef, carrion: 0.5,
+      detritus: 0.8, shellfish: (e >= 1 ? 0.8 : 0) * reef, insects: 0, seeds: 0, fruit: 0, nectar: 0,
     };
   }
   return {
@@ -207,6 +215,10 @@ export function simulateGeneration(g) {
   const health = Math.min(g.meters.food, g.meters.water, g.meters.oxygen) / 100;
   let growth = t.reproduction * 0.05 * (health - 0.4) * 2.5;
   if (health < 0.15) growth -= 0.25;
+  // Breeding makes up for an average predator toll, so poorly protected species fall behind
+  // and well-protected ones come out ahead.
+  const eaten = Math.round(g.population * predation(g));
+  if (g.era > 0) growth += PREDATION / 2 - predation(g);
   let pop = g.population * (1 + growth);
   const cap = carryingCapacity(g);
   if (pop > cap) pop = cap + (pop - cap) * 0.3;
@@ -227,7 +239,7 @@ export function simulateGeneration(g) {
     g.status = 'extinct';
     g.causeOfDeath = starvationCause(g);
   }
-  return { before, after: { ...g.meters, population: g.population }, income, drain, availability, health };
+  return { before, after: { ...g.meters, population: g.population }, income, drain, availability, health, eaten };
 }
 
 function starvationCause(g) {

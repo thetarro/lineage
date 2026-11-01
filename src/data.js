@@ -17,6 +17,12 @@ export const START = {
 };
 
 export const MIN_VIABLE_POPULATION = 500;
+
+// Share of the population predators take each generation from an unprotected species,
+// from the second era on (single cells have no predators yet). Protection is Defense plus
+// half of Size; it lowers the toll evenly until nothing can eat you at PREDATION_SAFE.
+export const PREDATION = 0.2;
+export const PREDATION_SAFE = 8;
 export const GENERATIONS_PER_ERA = 2;
 
 export const LINE_COLORS = { carnivore: 0xd9534f, omnivore: 0xe0a030, herbivore: 0x5cb85c };
@@ -424,7 +430,7 @@ export const ERAS = [
     name: 'Body Plans', mya: 540,
     blurb: 'An explosion of shapes fills the seas. What will your body be built on?',
     forks: [{ options: ['exoskeleton', 'spine'], title: 'Choose a body plan' }],
-    event: null,
+    event: 'ordovicianIce',
   },
   {
     name: 'The Shoreline', mya: 420,
@@ -505,6 +511,22 @@ export const EVENTS = {
     ],
     shock: { plants: 0.3, plankton: 0.5 },
   },
+  ordovicianIce: {
+    name: 'The Ordovician Freeze', icon: '🏔️', mya: 445,
+    warning: 'Ice caps are spreading over the south pole. The shallow seas are retreating.',
+    desc: 'Glaciers lock up the oceans\' water. The warm shallow seas drain and chill, and nearly nine in ten species vanish.',
+    base: 0.38,
+    mods: [
+      { tag: 'coldTolerant', value: 0.25, label: 'Cold tolerance' },
+      { trait: { name: 'size', max: 2 }, value: 0.08, label: 'Small body' },
+      { tag: 'burrower', value: 0.08, label: 'Shelter in sediment' },
+      { tag: 'detritivore', value: 0.08, label: 'Feeds on the dead' },
+      { tag: 'filterFeeder', value: -0.1, label: 'Plankton crashes' },
+      { tag: 'exoskeleton', value: -0.05, label: 'Trilobites decimated' },
+      { tag: 'fast', value: 0.05, label: 'Follows the shrinking warm seas' },
+    ],
+    shock: { plankton: 0.5, shellfish: 0.6 },
+  },
   oceanAnoxia: {
     name: 'Ocean Anoxia', icon: '🌫️', mya: 372,
     warning: 'Purple bacterial blooms stain the shallows. The water smells of rot.',
@@ -528,7 +550,8 @@ export const EVENTS = {
     base: 0.18,
     mods: [
       { tag: 'shell', habitat: 'aquatic', value: -0.15, label: 'Shells dissolve in acid seas' },
-      { tag: 'reef', value: -0.15, label: 'Reefs collapse' },
+      { tag: 'reef', value: -0.1, label: 'Reefs collapse' },
+      { tag: 'reef', value: 0.2, label: 'Reef dwellers swim to new waters' },
       { tag: 'burrower', value: 0.2, label: 'Shelter underground' },
       { trait: { name: 'metabolism', max: 3 }, value: 0.15, label: 'Low metabolism' },
       { tag: 'scavenger', value: 0.15, label: 'Feast on the dead' },
@@ -565,6 +588,8 @@ export const EVENTS = {
       { tag: 'metamorphosis', value: 0.08, label: 'Pupae wait out the dark' },
       { tag: 'colony', value: 0.05, label: 'Food stored in the nest' },
       { tag: 'silk', value: 0.05, label: 'Webs catch whatever still moves' },
+      { tag: 'schooling', value: 0.12, label: 'Safety in numbers' },
+      { tag: 'symbiosis', value: 0.12, label: 'Partners share what food is left' },
     ],
     shock: { plants: 0.15, fruit: 0.05, nectar: 0.05, prey: 0.4, carrion: 2.0, insects: 0.7, plankton: 0.5 },
   },

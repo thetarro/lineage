@@ -143,7 +143,7 @@ function liveGeneration() {
   const food = r.after.food - r.before.food;
   UI.log(`Generation ${game.generation}: population ${UI.fmtPop(r.before.population)} → <b>${UI.fmtPop(r.after.population)}</b>
     <span class="${d >= 0 ? 'good' : 'bad'}">(${d >= 0 ? '+' : '-'}${UI.fmtPop(Math.abs(d))})</span>,
-    food ${food >= 0 ? '+' : ''}${Math.round(food)}.`);
+    food ${food >= 0 ? '+' : ''}${Math.round(food)}.${r.eaten ? ` Predators took ${UI.fmtPop(r.eaten)}.` : ''}`);
   if (game.status === 'extinct') return ending();
   mutationPhase();
 }

@@ -67,7 +67,8 @@ export function renderHUD(g) {
 
   const ev = upcomingEvent(g);
   const warn = $('warning');
-  warn.hidden = !ev || g.status !== 'alive';
+  const past = g.history.some((h) => h.kind === 'event' && h.era === g.era); // already faced this era's disaster
+  warn.hidden = !ev || past || g.status !== 'alive';
   if (ev) warn.innerHTML = `<b>⚠ Signs of change:</b> ${ev.warning}`;
 }
 

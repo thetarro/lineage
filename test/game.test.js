@@ -154,6 +154,53 @@ test('arthropod traits count in their extinction events', () => {
   assert.ok(modLabels(spider, 'meteor').includes('Webs catch whatever still moves'));
 });
 
+test('Body Plans ends with the End-Ordovician extinction, where cold tolerance helps', () => {
+  const g = lineage(['carnivore', 'shell']);
+  assert.equal(G.currentEra(g).name, 'Body Plans');
+  assert.equal(G.upcomingEvent(g).name, 'The Ordovician Freeze');
+  const cold = withChoices(['carnivore', 'coldTolerance'], 2);
+  assert.ok(modLabels(cold, 'ordovicianIce').includes('Cold tolerance'));
+});
+
+test('reef lineages lose their reefs but can swim to new waters', () => {
+  const reef = lineage(['carnivore', 'speed', 'spine', 'stayWater', 'reef']);
+  const labels = modLabels(reef, 'greatDying');
+  assert.ok(labels.includes('Reefs collapse') && labels.includes('Reef dwellers swim to new waters'));
+  const net = G.eventBreakdown(reef, EVENTS.greatDying).filter((l) => l.label.startsWith('Reef')).reduce((sum, l) => sum + l.value, 0);
+  assert.ok(net > 0, 'reef modifiers should no longer be a net penalty');
+  assert.ok(modLabels(lineage(['carnivore', 'speed', 'spine', 'stayWater', 'reef', 'schooling']), 'meteor').includes('Safety in numbers'));
+  assert.ok(modLabels(lineage(['carnivore', 'speed', 'spine', 'stayWater', 'reef', 'symbiosis']), 'meteor').includes('Partners share what food is left'));
+});
+
+// ── Predators ──────────────────────────────────────────────────────────────
+
+test('predators only appear once life has bodies', () => {
+  const cell = G.createGame();
+  assert.equal(G.predation(cell), 0);
+  assert.equal(G.simulateGeneration(cell).eaten, 0);
+});
+
+test('defense and size protect against predators, down to nothing', () => {
+  const g = lineage(['carnivore']);
+  const at = (defense, size) => { g.traits.defense = defense; g.traits.size = size; return G.predation(g); };
+  assert.ok(at(1, 1) > at(4, 1), 'more defense should mean fewer losses');
+  assert.ok(at(4, 1) > at(4, 5), 'a bigger body should mean fewer losses');
+  assert.equal(at(8, 1), 0, 'a well-armored species should be safe');
+  assert.equal(at(10, 10), 0);
+});
+
+test('a well-defended species outgrows an undefended one', () => {
+  const grow = (defense) => {
+    const g = lineage(['herbivore']);
+    g.traits.defense = defense;
+    const r = G.simulateGeneration(g);
+    return { pop: g.population, eaten: r.eaten };
+  };
+  const weak = grow(1), strong = grow(9);
+  assert.ok(weak.eaten > 0 && strong.eaten === 0);
+  assert.ok(strong.pop > weak.pop);
+});
+
 // ── Whole games ────────────────────────────────────────────────────────────
 
 /** Play a full game with random choices; returns the finished game. */
