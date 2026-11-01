@@ -106,6 +106,15 @@ export class World {
     this.life = []; // other species: { obj, sp, ...motion }
     this.met = new Set(); // species ids the player has encountered
     this.onEncounter = null;
+    this.active = false; // the player is out roaming: not on a menu or watching a disaster
+    this.food = []; // { obj, type, baseY, phase, eatenAt }
+    this.foodKind = null;
+    this.onEat = null;
+    this.hunt = null; // { e, until, speed }: a predator chasing the player
+    this.nextHunt = 0;
+    this.onHuntStart = null;
+    this.onBite = null;
+    this.onHuntEnd = null;
     this.swayers = [];
     this.particles = [];
     this.shake = 0;
@@ -119,6 +128,14 @@ export class World {
     );
     this.marker.rotation.x = Math.PI;
     this.stage.add(this.marker);
+    // The same marker in red over a predator that is hunting the player.
+    this.huntMarker = new THREE.Mesh(
+      new THREE.ConeGeometry(0.3, 0.6, 4),
+      new THREE.MeshStandardMaterial({ color: 0xff4d4d, emissive: 0xff4d4d, emissiveIntensity: 0.9, flatShading: true }),
+    );
+    this.huntMarker.rotation.x = Math.PI;
+    this.huntMarker.visible = false;
+    this.stage.add(this.huntMarker);
     this.animations = [];
     this.clock = new THREE.Clock();
 
@@ -143,6 +160,11 @@ export class World {
     this.swayers = [];
     this.particles = [];
     this.life = [];
+    this.food = [];
+    this.foodKind = null;
+    this.hunt = null;
+    this.huntMarker.visible = false;
+    this.era = g.era;
     this.themeKey = themeFor(g);
     const theme = THEMES[this.themeKey];
     this.aquatic = theme.water;
@@ -351,6 +373,7 @@ export class World {
       phase: 0, anim: 0, moving: 0.3, grow: evolve ? 0 : 1, flying: g.tags.has('flight'),
       speed: (0.9 + g.traits.speed * 0.25) * (g.era === 0 ? 0.5 : 1),
     };
+    this.setFood(g);
 
     const lead = this.player;
     const n = Math.max(0, ...GROUPS.filter(([tag]) => g.tags.has(tag)).map(([, count]) => count));
@@ -369,6 +392,137 @@ export class World {
         phase: rand(0, 6), anim: 0, moving: 0.3, grow: lead.grow, flying: lead.flying, speed: lead.speed,
       };
     });
+  }
+
+  // ── Food the player can collect ──────────────────────────────────────
+
+  /** Scatter food that suits the species' diet; rebuilt only when the kind of food changes. */
+  setFood(g) {
+    const kind = g.era === 0 || !g.diet ? 'nutrients' : { carnivore: 'meat', herbivore: 'plants' }[g.diet.line] ?? 'mixed';
+    if (kind === this.foodKind) return;
+    for (const f of this.food) {
+      this.env.remove(f.obj);
+      this.clear(f.obj);
+    }
+    this.foodKind = kind;
+    this.food = Array.from({ length: 14 }, (_, i) => {
+      const type = kind === 'mixed' ? (i % 2 ? 'meat' : 'plants') : kind;
+      const f = { obj: buildFood(type, this.aquatic), type, phase: rand(0, 6), eatenAt: null };
+      this.env.add(f.obj);
+      this.placeFood(f);
+      return f;
+    });
+  }
+
+  placeFood(f) {
+    const [x, z] = this.aquatic ? [rand(-22, 22), rand(-22, 22)] : this.dryPoint();
+    f.baseY = groundHeight(x, z) + (this.aquatic ? rand(1.2, 6) : 0.3);
+    f.obj.position.set(x, f.baseY, z);
+    f.obj.visible = true;
+    f.eatenAt = null;
+  }
+
+  updateFood(lead, dt, t) {
+    for (const f of this.food) {
+      if (f.eatenAt !== null) {
+        if (t - f.eatenAt > 8) this.placeFood(f); // grows back somewhere else
+        continue;
+      }
+      f.obj.position.y = f.baseY + Math.sin(t * 1.5 + f.phase) * 0.12;
+      f.obj.rotation.y += dt * 0.6;
+      if (!this.active) continue;
+      const d = f.obj.position;
+      const flat = Math.hypot(d.x - lead.pos.x, d.z - lead.pos.z);
+      const reach = 0.9 + lead.scale * 0.8;
+      // Flyers swoop down for food on the ground, so only nearness on the map counts for them.
+      const near = lead.flying && !this.aquatic ? flat < reach * 1.5 : Math.hypot(flat, d.y - lead.pos.y) < reach;
+      if (!near) continue;
+      f.obj.visible = false;
+      f.eatenAt = t;
+      this.burst(d, FOOD_COLORS[f.type]);
+      this.onEat?.(f.type);
+    }
+  }
+
+  /** A quick puff of crumbs where something was eaten. */
+  burst(pos, color) {
+    const bits = Array.from({ length: 7 }, () => {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.06, 5, 4), new THREE.MeshBasicMaterial({ color }));
+      m.position.copy(pos);
+      m.userData.v = new THREE.Vector3(rand(-1, 1), rand(-0.2, 1), rand(-1, 1)).normalize().multiplyScalar(rand(0.6, 1.2));
+      this.fx.add(m);
+      return m;
+    });
+    const start = pos.clone();
+    this.animate(0.5, (k) => {
+      for (const m of bits) {
+        m.position.copy(start).addScaledVector(m.userData.v, k);
+        m.scale.setScalar(1 - k);
+      }
+      if (k === 1) for (const m of bits) { this.fx.remove(m); m.geometry.dispose(); m.material.dispose(); }
+    });
+  }
+
+  // ── Predators that hunt the player ───────────────────────────────────
+
+  updateHunt(lead, dt, t) {
+    if (!this.active) {
+      if (this.hunt) this.endHunt(t, 'cancelled');
+      this.nextHunt = 0;
+      return;
+    }
+    if (!this.hunt) {
+      if (!this.nextHunt) this.nextHunt = t + rand(12, 25);
+      if (t >= this.nextHunt) this.startHunt(lead, t);
+      return;
+    }
+    const { e, speed } = this.hunt;
+    const p = e.obj.position;
+    const to = lead.pos.clone().sub(p);
+    const swims = this.aquatic && e.sp.kind === 'swimmer';
+    if (!swims) to.y = 0; // walkers and seafloor crawlers stay on the ground
+    const step = to.length();
+    if (step > 1e-3) p.addScaledVector(to.normalize(), Math.min(step, speed * dt));
+    const ground = groundHeight(p.x, p.z);
+    p.y = swims ? Math.max(ground + 1, Math.min(14, p.y)) : this.aquatic ? ground : Math.max(ground, WATER_LEVEL);
+    e.obj.lookAt(lead.pos.x, swims ? lead.pos.y : p.y, lead.pos.z);
+    this.huntMarker.position.set(p.x, p.y + 1.6 + (e.sp.size ?? 1) * 1.6 + Math.sin(t * 5) * 0.15, p.z);
+    this.huntMarker.rotation.y += dt * 3;
+
+    const dist = lead.pos.distanceTo(p);
+    if (dist < 0.9 + (e.sp.size ?? 1) * 0.7 + lead.scale * 0.5) {
+      this.onBite?.(e.sp);
+      this.endHunt(t, 'caught');
+    } else if (t > this.hunt.until || dist > 24) {
+      this.endHunt(t, 'escaped');
+    }
+  }
+
+  /** The nearest predator of this habitat starts chasing the player. */
+  startHunt(lead, t) {
+    const hunters = this.life.filter((e) => e.sp.predator && (this.aquatic ? e.sp.kind !== 'walker' : e.sp.kind === 'walker'));
+    if (!hunters.length) {
+      this.nextHunt = t + 30;
+      return;
+    }
+    const e = hunters.reduce((a, b) => (a.obj.position.distanceTo(lead.pos) < b.obj.position.distanceTo(lead.pos) ? a : b));
+    this.hunt = { e, until: t + 8, speed: 2.2 + this.era * 0.15 };
+    this.huntMarker.visible = true;
+    this.onHuntStart?.(e.sp);
+  }
+
+  endHunt(t, outcome) {
+    const { e } = this.hunt;
+    // Resume its usual circuit from where the chase left it.
+    const p = e.obj.position;
+    const a = (e.a0 ?? e.a) + e.w * t;
+    e.cx = p.x - Math.cos(a) * e.r;
+    e.cz = p.z - Math.sin(a) * e.r;
+    if (e.sp.kind === 'swimmer') e.y = p.y;
+    this.hunt = null;
+    this.huntMarker.visible = false;
+    this.nextHunt = t + rand(25, 45);
+    if (outcome === 'escaped') this.onHuntEnd?.(e.sp);
   }
 
   // ── Extinction events ──────────────────────────────────────────────────
@@ -453,12 +607,14 @@ export class World {
     });
 
     for (const s of this.swayers) s.obj.rotation.z = Math.sin(t * 0.8 + s.phase) * s.amp;
-    for (const e of this.life) this.moveLife(e, t);
+    for (const e of this.life) if (e !== this.hunt?.e) this.moveLife(e, t);
     for (const p of this.particles) this.moveParticles(p, dt, t);
     const lead = this.player;
     if (lead) {
       this.movePlayer(lead, dt);
       this.moveFollowers(lead, dt, t);
+      this.updateFood(lead, dt, t);
+      this.updateHunt(lead, dt, t);
     }
 
     // Camera travels with the player, keeping the chosen orbit angle.
@@ -613,6 +769,48 @@ export class World {
       });
     }
   }
+}
+
+// ── Food items ──────────────────────────────────────────────────────────
+
+const FOOD_COLORS = { nutrients: 0xfff1a0, plants: 0x5cc46a, meat: 0xc2453c };
+
+/** A small, softly glowing item: nutrient specks, a plant clump (or berry bush on land), or a chunk of meat. */
+function buildFood(type, aquatic) {
+  const g = new THREE.Group();
+  const glow = (color, k = 0.3) => mat(color, { emissive: color, emissiveIntensity: k });
+  if (type === 'nutrients') {
+    for (let i = 0; i < 5; i++) {
+      const speck = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 5), glow(FOOD_COLORS.nutrients, 0.9));
+      speck.position.set(rand(-0.2, 0.2), rand(-0.15, 0.15), rand(-0.2, 0.2));
+      g.add(speck);
+    }
+  } else if (type === 'plants') {
+    if (aquatic) {
+      for (let i = 0; i < 4; i++) {
+        const blob = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16, 0), glow(FOOD_COLORS.plants));
+        blob.position.set(rand(-0.15, 0.15), i * 0.12, rand(-0.15, 0.15));
+        blob.scale.set(1, 0.6, 1);
+        g.add(blob);
+      }
+    } else {
+      g.add(new THREE.Mesh(new THREE.IcosahedronGeometry(0.3, 0), glow(0x4f9a3c, 0.2)));
+      for (let i = 0; i < 5; i++) {
+        const berry = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 5), glow(0xd63a4a, 0.5));
+        const a = i * 1.26;
+        berry.position.set(Math.cos(a) * 0.24, rand(0, 0.18), Math.sin(a) * 0.24);
+        g.add(berry);
+      }
+    }
+  } else {
+    const chunk = new THREE.Mesh(new THREE.DodecahedronGeometry(0.2, 0), glow(FOOD_COLORS.meat));
+    chunk.scale.set(1.3, 0.8, 1);
+    const bone = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.5, 5), glow(0xf0e6d0, 0.2));
+    bone.rotation.z = Math.PI / 2.4;
+    g.add(chunk, bone);
+  }
+  g.traverse((o) => { o.castShadow = true; });
+  return g;
 }
 
 // ── Creature construction ───────────────────────────────────────────────

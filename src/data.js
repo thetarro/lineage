@@ -23,6 +23,15 @@ export const MIN_VIABLE_POPULATION = 500;
 // half of Size; it lowers the toll evenly until nothing can eat you at PREDATION_SAFE.
 export const PREDATION = 0.2;
 export const PREDATION_SAFE = 8;
+
+// Food the player can collect by swimming or walking to it: each item adds FORAGE_BITE
+// to the Food meter, up to FORAGE_CAP per generation.
+export const FORAGE_BITE = 3;
+export const FORAGE_CAP = 18;
+
+// When a hunting predator catches the player it takes this many times the generation's
+// predation share (so Defense and size protect here too), never below the viable minimum.
+export const BITE_SHARE = 0.5;
 export const GENERATIONS_PER_ERA = 2;
 
 export const LINE_COLORS = { carnivore: 0xd9534f, omnivore: 0xe0a030, herbivore: 0x5cb85c };

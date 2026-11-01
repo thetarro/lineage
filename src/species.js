@@ -4,6 +4,7 @@
 // ── Species: name, fact, behavior ───────────────────────────────────────
 // kind: drifter | swimmer | crawler (seafloor) | walker | flyer | plant
 // size scales the model; speed is m/s; reach widens the "you meet it" radius.
+// predator: may hunt the player.
 
 export const SPECIES = {
   bacterium: { name: 'Archaea & bacteria', kind: 'drifter', fact: "Earth's first life, thriving without oxygen." },
@@ -14,19 +15,19 @@ export const SPECIES = {
   jellyfish: { name: 'Medusoids', kind: 'drifter', fact: 'Early jellyfish-like drifters, among the oldest animals.' },
   sponge: { name: 'Sponges', kind: 'plant', fact: 'Simple filter-feeding animals with no organs, among the earliest animal lineages.' },
   trilobite: { name: 'Trilobites', kind: 'crawler', speed: 0.4, fact: 'Armored arthropods with crystal eyes. Over 20,000 species lived for 270 million years.' },
-  anomalocaris: { name: 'Anomalocaris', kind: 'swimmer', speed: 1.6, size: 1.2, reach: 1.5, fact: 'A Cambrian apex predator that grabbed prey with spiny frontal limbs.' },
+  anomalocaris: { name: 'Anomalocaris', kind: 'swimmer', predator: true, speed: 1.6, size: 1.2, reach: 1.5, fact: 'A Cambrian apex predator that grabbed prey with spiny frontal limbs.' },
   opabinia: { name: 'Opabinia', kind: 'swimmer', speed: 0.8, fact: 'Five eyes and a grasping nozzle. It made scientists laugh when first presented.' },
   hallucigenia: { name: 'Hallucigenia', kind: 'crawler', speed: 0.15, fact: 'A spiny worm so strange it was first reconstructed upside down.' },
   pikaia: { name: 'Pikaia', kind: 'swimmer', speed: 1, fact: 'A tiny swimmer with a notochord, a distant relative of every vertebrate.' },
-  eurypterid: { name: 'Sea scorpions', kind: 'crawler', speed: 0.5, size: 1.4, fact: 'Eurypterids; some grew over 2.5 m long, the largest arthropods ever.' },
-  orthocone: { name: 'Orthocone nautiloids', kind: 'swimmer', speed: 0.9, size: 1.2, reach: 1.5, fact: 'Squid-like hunters in straight shells up to 6 m long.' },
-  dunkleosteus: { name: 'Dunkleosteus', kind: 'swimmer', speed: 1.4, size: 1.5, reach: 3, fact: 'A giant armored fish with self-sharpening bony jaw blades.' },
+  eurypterid: { name: 'Sea scorpions', kind: 'crawler', predator: true, speed: 0.5, size: 1.4, fact: 'Eurypterids; some grew over 2.5 m long, the largest arthropods ever.' },
+  orthocone: { name: 'Orthocone nautiloids', kind: 'swimmer', predator: true, speed: 0.9, size: 1.2, reach: 1.5, fact: 'Squid-like hunters in straight shells up to 6 m long.' },
+  dunkleosteus: { name: 'Dunkleosteus', kind: 'swimmer', predator: true, speed: 1.4, size: 1.5, reach: 3, fact: 'A giant armored fish with self-sharpening bony jaw blades.' },
   ostracoderm: { name: 'Ostracoderms', kind: 'swimmer', speed: 0.8, fact: 'Jawless armored fish, early experiments in having a backbone.' },
   crinoid: { name: 'Crinoids', kind: 'plant', sway: true, fact: 'Sea lilies: relatives of starfish that filter food from atop long stalks.' },
   cooksonia: { name: 'Cooksonia', kind: 'plant', fact: 'A few centimeters tall, one of the very first plants on land.' },
   moss: { name: 'Mosses & liverworts', kind: 'plant', fact: 'Low green carpets that first softened the bare rock.' },
   millipede: { name: 'Early millipedes', kind: 'walker', speed: 0.3, size: 1.3, fact: 'Among the first animals to walk on land.' },
-  stethacanthus: { name: 'Stethacanthus', kind: 'swimmer', speed: 1.8, size: 1.2, reach: 1.5, fact: 'An early shark with a strange anvil-shaped crest on its back.' },
+  stethacanthus: { name: 'Stethacanthus', kind: 'swimmer', predator: true, speed: 1.8, size: 1.2, reach: 1.5, fact: 'An early shark with a strange anvil-shaped crest on its back.' },
   ammonite: { name: 'Ammonites', kind: 'swimmer', speed: 0.6, fact: 'Coiled-shell relatives of squid that thrived for 340 million years.' },
   coelacanth: { name: 'Coelacanths', kind: 'swimmer', speed: 0.8, size: 1.3, fact: 'Lobe-finned fish thought extinct until one was caught alive in 1938.' },
   lepidodendron: { name: 'Lepidodendron', kind: 'plant', reach: 2, fact: 'Scale trees up to 40 m tall. Their remains became much of the coal we burn today.' },
@@ -34,10 +35,10 @@ export const SPECIES = {
   treeFern: { name: 'Tree ferns', kind: 'plant', fact: 'Ferns with trunks, the understory of the coal swamps.' },
   arthropleura: { name: 'Arthropleura', kind: 'walker', speed: 0.4, size: 1.2, reach: 1.5, fact: 'A millipede 2.5 m long, the largest land invertebrate ever.' },
   eryops: { name: 'Eryops', kind: 'walker', speed: 0.5, size: 1.2, fact: 'A 2 m amphibian that hunted fish in the swamps.' },
-  ichthyosaur: { name: 'Ichthyosaurs', kind: 'swimmer', speed: 2.2, size: 1.3, reach: 2, fact: 'Dolphin-shaped marine reptiles with the largest eyes of any animal.' },
-  plesiosaur: { name: 'Plesiosaurs', kind: 'swimmer', speed: 1.2, size: 1.3, reach: 2.5, fact: 'Long-necked marine reptiles that "flew" through water with four flippers.' },
+  ichthyosaur: { name: 'Ichthyosaurs', kind: 'swimmer', predator: true, speed: 2.2, size: 1.3, reach: 2, fact: 'Dolphin-shaped marine reptiles with the largest eyes of any animal.' },
+  plesiosaur: { name: 'Plesiosaurs', kind: 'swimmer', predator: true, speed: 1.2, size: 1.3, reach: 2.5, fact: 'Long-necked marine reptiles that "flew" through water with four flippers.' },
   sauropod: { name: 'Sauropods', kind: 'walker', speed: 0.7, size: 1.4, reach: 5, fact: 'The largest animals ever to walk the Earth, some over 30 m long.' },
-  theropod: { name: 'Tyrannosaurus', kind: 'walker', speed: 1.4, size: 1.3, reach: 3, fact: 'A 12 m predator with one of the strongest bites of any land animal.' },
+  theropod: { name: 'Tyrannosaurus', kind: 'walker', predator: true, speed: 1.4, size: 1.3, reach: 3, fact: 'A 12 m predator with one of the strongest bites of any land animal.' },
   triceratops: { name: 'Triceratops', kind: 'walker', speed: 0.6, size: 1.2, reach: 3, fact: 'A three-horned plant-eater with a bony neck frill.' },
   pachycephalosaurus: { name: 'Pachycephalosaurus', kind: 'walker', speed: 0.8, size: 1.2, reach: 2.5, fact: 'A two-legged plant-eater with a domed skull up to 25 cm thick, possibly used to butt rivals.' },
   cycad: { name: 'Cycads', kind: 'plant', fact: 'Palm-like seed plants, a staple food of plant-eating dinosaurs.' },
@@ -47,10 +48,10 @@ export const SPECIES = {
   seaweed: { name: 'Algae & seaweed', kind: 'plant', sway: true, shallow: true, fact: 'Marine algae swaying in the sunlit shallows.' },
   kelp: { name: 'Kelp', kind: 'plant', shallow: true, fact: 'Giant brown algae forming underwater forests. It evolved only ~30 million years ago.' },
   whale: { name: 'Whales', kind: 'swimmer', speed: 1.5, size: 1.4, reach: 5, fact: 'Mammals whose ancestors walked on land before returning to the sea.' },
-  megalodon: { name: 'Megalodon', kind: 'swimmer', speed: 2, size: 3, reach: 4, fact: 'An 18 m shark, the largest predatory fish that ever lived.' },
+  megalodon: { name: 'Megalodon', kind: 'swimmer', predator: true, speed: 2, size: 3, reach: 4, fact: 'An 18 m shark, the largest predatory fish that ever lived.' },
   fish: { name: 'Ray-finned fish', kind: 'swimmer', speed: 1.4, fact: 'The most diverse group of vertebrates alive today.' },
   mammoth: { name: 'Woolly mammoths', kind: 'walker', speed: 0.7, size: 1.2, reach: 3.5, fact: 'Shaggy elephants of the Ice Age steppes.' },
-  sabertooth: { name: 'Smilodon', kind: 'walker', speed: 1.3, size: 1.2, fact: 'The saber-toothed cat, with fangs 28 cm long.' },
+  sabertooth: { name: 'Smilodon', kind: 'walker', predator: true, speed: 1.3, size: 1.2, fact: 'The saber-toothed cat, with fangs 28 cm long.' },
   bird: { name: 'Birds', kind: 'flyer', speed: 3, fact: 'The dinosaurs that survived the meteor.' },
   deer: { name: 'Deer', kind: 'walker', speed: 1, fact: 'Grazers that spread across the new grasslands.' },
   grass: { name: 'Grasses', kind: 'plant', fact: 'They spread only ~20 million years ago, transforming whole continents.' },
@@ -73,7 +74,7 @@ export const SPECIES = {
   marrella: { name: 'Marrella', kind: 'swimmer', speed: 0.9, fact: 'The "lace crab", the most common animal in the Burgess Shale, with sweeping spines on its head.' },
   haikouichthys: { name: 'Haikouichthys', kind: 'swimmer', speed: 1.2, fact: 'One of the earliest known fish: no jaws, no scales, just a few centimeters long.' },
   // Silurian and Devonian
-  cladoselache: { name: 'Cladoselache', kind: 'swimmer', speed: 1.9, size: 1.1, reach: 1.5, fact: 'One of the oldest sharks, a 2 m hunter whose fossils still hold its last meals.' },
+  cladoselache: { name: 'Cladoselache', kind: 'swimmer', predator: true, speed: 1.9, size: 1.1, reach: 1.5, fact: 'One of the oldest sharks, a 2 m hunter whose fossils still hold its last meals.' },
   acanthodian: { name: 'Acanthodians', kind: 'swimmer', speed: 1.1, fact: 'The "spiny sharks": small fish with a sharp spine before every fin, among the first with jaws.' },
   brittleStar: { name: 'Brittle stars', kind: 'crawler', speed: 0.2, size: 1.2, fact: 'Starfish relatives that crawl on five snaking arms, an ancient design still common on seafloors today.' },
   trigonotarbid: { name: 'Trigonotarbids', kind: 'walker', speed: 0.3, size: 1.4, fact: 'Spider-like arachnids that could not spin silk, among the first predators on land.' },
@@ -83,31 +84,31 @@ export const SPECIES = {
   tiktaalik: { name: 'Tiktaalik', kind: 'crawler', speed: 0.2, size: 1.2, fact: 'A "fishapod" with a neck and sturdy fins to prop itself up in the shallows: half fish, half tetrapod.' },
   ichthyostega: { name: 'Ichthyostega', kind: 'walker', speed: 0.3, size: 1.2, reach: 1.5, fact: 'One of the first four-legged vertebrates, with seven toes on each hind foot.' },
   // Carboniferous and Permian
-  helicoprion: { name: 'Helicoprion', kind: 'swimmer', speed: 1.5, size: 1.2, reach: 2, fact: 'A shark relative with a spiral whorl of teeth in its lower jaw, like a buzz saw.' },
-  xenacanthus: { name: 'Xenacanthus', kind: 'swimmer', speed: 1.2, fact: 'An eel-shaped freshwater shark with a long spine sticking back from its head.' },
+  helicoprion: { name: 'Helicoprion', kind: 'swimmer', predator: true, speed: 1.5, size: 1.2, reach: 2, fact: 'A shark relative with a spiral whorl of teeth in its lower jaw, like a buzz saw.' },
+  xenacanthus: { name: 'Xenacanthus', kind: 'swimmer', predator: true, speed: 1.2, fact: 'An eel-shaped freshwater shark with a long spine sticking back from its head.' },
   mesosaurus: { name: 'Mesosaurus', kind: 'swimmer', speed: 1.3, fact: 'One of the first reptiles to return to the water. Its fossils in both Africa and South America helped prove continental drift.' },
-  dimetrodon: { name: 'Dimetrodon', kind: 'walker', speed: 0.6, size: 1.2, reach: 2, fact: 'A sail-backed predator often mistaken for a dinosaur. It was actually closer to mammals.' },
+  dimetrodon: { name: 'Dimetrodon', kind: 'walker', predator: true, speed: 0.6, size: 1.2, reach: 2, fact: 'A sail-backed predator often mistaken for a dinosaur. It was actually closer to mammals.' },
   edaphosaurus: { name: 'Edaphosaurus', kind: 'walker', speed: 0.4, size: 1.2, reach: 2, fact: 'A sail-backed plant-eater whose sail spines bristled with little crossbars.' },
   hylonomus: { name: 'Hylonomus', kind: 'walker', speed: 0.7, size: 1.3, fact: 'A 20 cm lizard-like animal, the oldest known reptile, found fossilized inside hollow tree stumps.' },
   diplocaulus: { name: 'Diplocaulus', kind: 'walker', speed: 0.3, size: 1.2, fact: 'An amphibian with a boomerang-shaped head, perhaps used like a hydrofoil when swimming.' },
-  gorgonops: { name: 'Gorgonopsids', kind: 'walker', speed: 1.1, size: 1.2, reach: 2, fact: 'Saber-toothed predators of the late Permian, distant relatives of mammals.' },
+  gorgonops: { name: 'Gorgonopsids', kind: 'walker', predator: true, speed: 1.1, size: 1.2, reach: 2, fact: 'Saber-toothed predators of the late Permian, distant relatives of mammals.' },
   scutosaurus: { name: 'Scutosaurus', kind: 'walker', speed: 0.35, size: 1.2, reach: 2, fact: 'A squat, cow-sized plant-eater studded with bony armor.' },
   // Mesozoic
-  mosasaur: { name: 'Mosasaurs', kind: 'swimmer', speed: 1.8, size: 1.4, reach: 3, fact: 'Giant marine lizards related to monitor lizards and snakes. The largest reached 17 m.' },
+  mosasaur: { name: 'Mosasaurs', kind: 'swimmer', predator: true, speed: 1.8, size: 1.4, reach: 3, fact: 'Giant marine lizards related to monitor lizards and snakes. The largest reached 17 m.' },
   archelon: { name: 'Archelon', kind: 'swimmer', speed: 0.8, size: 1.6, reach: 2, fact: 'A sea turtle 4 m long, the largest turtle ever found.' },
   belemnite: { name: 'Belemnites', kind: 'swimmer', speed: 1, fact: 'Squid relatives with a bullet-shaped internal shell. Fossil ones were once called "thunderbolts".' },
   hybodus: { name: 'Hybodus', kind: 'swimmer', speed: 1.4, size: 1.1, fact: 'A shark with spines before its dorsal fins and two kinds of teeth, for gripping and for crushing.' },
   stegosaurus: { name: 'Stegosaurus', kind: 'walker', speed: 0.5, size: 1.2, reach: 3.5, fact: 'Its tail spikes were real weapons: one Allosaurus fossil has a wound that matches them.' },
-  velociraptor: { name: 'Velociraptor', kind: 'walker', speed: 1.6, size: 1.1, fact: 'A feathered predator the size of a turkey, with a sickle-shaped claw on each foot.' },
+  velociraptor: { name: 'Velociraptor', kind: 'walker', predator: true, speed: 1.6, size: 1.1, fact: 'A feathered predator the size of a turkey, with a sickle-shaped claw on each foot.' },
   ankylosaurus: { name: 'Ankylosaurus', kind: 'walker', speed: 0.35, size: 1.2, reach: 3, fact: 'A living tank, with bony armor down to its eyelids and a club on its tail.' },
   parasaurolophus: { name: 'Parasaurolophus', kind: 'walker', speed: 0.6, size: 1.2, reach: 3, fact: 'A duck-billed dinosaur whose hollow crest worked like a trumpet for deep calls.' },
   // Cenozoic
   dolphin: { name: 'Dolphins', kind: 'swimmer', speed: 2.4, size: 1.1, reach: 1.5, fact: 'Echolocating mammals that hunt together in cooperative pods.' },
-  basilosaurus: { name: 'Basilosaurus', kind: 'swimmer', speed: 1.2, size: 1.3, reach: 4, fact: 'An 18 m early whale, so serpent-like it was first mistaken for a reptile. It still had tiny hind legs.' },
+  basilosaurus: { name: 'Basilosaurus', kind: 'swimmer', predator: true, speed: 1.2, size: 1.3, reach: 4, fact: 'An 18 m early whale, so serpent-like it was first mistaken for a reptile. It still had tiny hind legs.' },
   seaTurtle: { name: 'Sea turtles', kind: 'swimmer', speed: 0.8, fact: "They outlived the dinosaurs, and navigate the oceans using Earth's magnetic field." },
   squid: { name: 'Squid', kind: 'swimmer', speed: 1.3, fact: 'Jet-propelled hunters with eight arms, two long tentacles and some of the largest eyes in nature.' },
   penguin: { name: 'Penguins', kind: 'swimmer', speed: 1.8, fact: 'Birds that traded flying in air for flying underwater. Some early penguins stood as tall as a person.' },
-  terrorBird: { name: 'Terror birds', kind: 'walker', speed: 1.6, size: 1.1, reach: 2, fact: 'Flightless predatory birds up to 3 m tall with axe-like hooked beaks.' },
+  terrorBird: { name: 'Terror birds', kind: 'walker', predator: true, speed: 1.6, size: 1.1, reach: 2, fact: 'Flightless predatory birds up to 3 m tall with axe-like hooked beaks.' },
   megatherium: { name: 'Megatherium', kind: 'walker', speed: 0.4, size: 1.2, reach: 3, fact: 'A ground sloth as big as an elephant that could rear up on its hind legs to browse trees.' },
   glyptodon: { name: 'Glyptodon', kind: 'walker', speed: 0.3, size: 1.1, reach: 2.5, fact: 'An armadillo relative the size of a small car, inside a domed shell of over 1,000 bony plates.' },
   woollyRhino: { name: 'Woolly rhinos', kind: 'walker', speed: 0.6, size: 1.2, reach: 3, fact: 'Shaggy Ice Age rhinoceroses with a front horn up to a meter long.' },
@@ -160,6 +161,11 @@ export function speciesByEra() {
   return ERA_LIFE.map((e) => [...(e.water ?? []), ...(e.land ?? [])]
     .map(([id]) => id)
     .filter((id) => !seen.has(id) && seen.add(id)));
+}
+
+/** Every era and habitat a species lives in, in era order. */
+export function whereToFind(id) {
+  return ERA_LIFE.flatMap((e, era) => ['water', 'land'].filter((h) => e[h]?.some(([sid]) => sid === id)).map((habitat) => ({ era, habitat })));
 }
 
 export function lifeFor(era, habitat) {

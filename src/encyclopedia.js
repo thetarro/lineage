@@ -4,6 +4,7 @@
 
 import * as THREE from 'three';
 import { SPECIES, speciesByEra } from './fauna.js';
+import { whereToFind } from './species.js';
 import { ERAS } from './data.js';
 import { showModal, fmtMya } from './ui.js';
 import { ENTRIES } from './encyclopedia-entries.js';
@@ -37,6 +38,13 @@ function catalog() {
 export function progress(discovered) {
   const all = catalog();
   return { found: all.filter(({ sp }) => discovered.has(sp.id)).length, total: all.length };
+}
+
+/** Where to look for a species not discovered yet. */
+function whereHint(id) {
+  const habitats = new Set(whereToFind(id).map((w) => w.habitat));
+  if (habitats.size > 1) return '🌊 🌍 Sea and land';
+  return habitats.has('land') ? '🌍 On land' : SPECIES[id].shallow ? '🌊 In shallow seas' : '🌊 In the sea';
 }
 
 // ── Thumbnails ────────────────────────────────────────────────────────────
@@ -100,7 +108,7 @@ function listHTML(discovered) {
   const sections = ERAS.map((era, i) => {
     const tiles = all.filter((s) => s.era === i).map(({ sp }) => (discovered.has(sp.id)
       ? `<button class="codex-tile" data-id="${sp.id}"><img data-thumb="${sp.id}" data-locked="0" alt=""><span>${sp.name}</span></button>`
-      : `<div class="codex-tile locked" title="Not discovered yet"><img data-thumb="${sp.id}" data-locked="1" alt=""><span>???</span></div>`)).join('');
+      : `<div class="codex-tile locked" title="Not discovered yet"><img data-thumb="${sp.id}" data-locked="1" alt=""><span>???</span><small class="codex-where">${whereHint(sp.id)}</small></div>`)).join('');
     return tiles && `<h3 class="codex-era">${era.name} <span>${fmtMya(era.mya)}</span></h3><div class="codex-grid">${tiles}</div>`;
   }).join('');
   return `
@@ -110,7 +118,7 @@ function listHTML(discovered) {
         <h2>📖 Prehistory Encyclopedia</h2>
         <span class="codex-count">${found} / ${total} discovered</span>
       </div>
-      <p class="codex-hint">Get close to a species while playing to discover it.</p>
+      <p class="codex-hint">Get close to a species while playing to discover it. Undiscovered species are listed under the era they first appear in.</p>
       ${sections}
     </div>`;
 }

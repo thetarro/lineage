@@ -314,6 +314,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .codex-tile img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; }
 button.codex-tile:hover { transform: translateY(-3px); border-color: var(--accent); }
 .codex-tile.locked { color: var(--muted); opacity: 0.75; cursor: not-allowed; }
+.codex-where { font-weight: 400; font-size: 10.5px; color: var(--muted); }
 
 .codex-entry { max-width: 620px; margin: 0 auto; }
 .codex-hero { display: block; width: min(360px, 100%); aspect-ratio: 4 / 3; object-fit: contain; margin: 4px auto 0; }

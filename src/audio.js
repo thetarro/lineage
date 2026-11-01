@@ -237,6 +237,30 @@ export class Sound {
     }
   }
 
+  eat() {
+    if (!this.ctx) return;
+    this.tone(this.now, midi(72), 0.12, { gain: 0.08, freqEnd: midi(79) });
+  }
+
+  /** A predator starts hunting: a low, uneasy pulse. */
+  danger() {
+    if (!this.ctx) return;
+    for (let i = 0; i < 3; i++) this.tone(this.now + i * 0.32, midi(40), 0.28, { type: 'sawtooth', gain: 0.07, attack: 0.04 });
+  }
+
+  bite() {
+    if (!this.ctx) return;
+    this.noise(this.now, 0.25, { freq: 400, gain: 0.5 });
+    this.tone(this.now, 110, 0.4, { gain: 0.3, freqEnd: 50 });
+  }
+
+  /** The predator's teeth meet armor. */
+  blocked() {
+    if (!this.ctx) return;
+    this.noise(this.now, 0.08, { type: 'highpass', freq: 2500, gain: 0.35 });
+    this.tone(this.now, midi(88), 0.3, { type: 'triangle', gain: 0.06 });
+  }
+
   discover() {
     if (!this.ctx) return;
     [79, 86].forEach((n, i) => this.tone(this.now + i * 0.1, midi(n), 0.9, { gain: 0.07 }));

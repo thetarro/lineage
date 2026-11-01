@@ -110,6 +110,8 @@ def main():
             page.wait_for_selector('.codex')
             check(page.locator('.codex-tile[data-id]').count() == 0, 'no species can be opened')
             check(page.locator('.codex-tile.locked').count() > 0, 'species show as locked')
+            hints = page.locator('.codex-tile.locked .codex-where').all_inner_texts()
+            check(len(hints) == page.locator('.codex-tile.locked').count() and all(('sea' in h.lower()) or ('land' in h.lower()) for h in hints), 'locked species hint where to find them')
             page.locator('.codex-tile.locked').first.click(force=True)
             check(page.locator('.codex-entry').count() == 0, 'clicking a locked species does nothing')
             page.click('#codex-close')

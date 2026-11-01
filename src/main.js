@@ -3,7 +3,7 @@
 import { World } from './world.js';
 import * as G from './game.js';
 import * as UI from './ui.js';
-import { ERAS, GENERATIONS_PER_ERA } from './data.js';
+import { ERAS, GENERATIONS_PER_ERA, FORAGE_CAP } from './data.js';
 import { Joystick } from './controls.js';
 import { Sound } from './audio.js';
 import { VERSION } from './version.js';
@@ -25,6 +25,42 @@ world.onEncounter = (sp) => {
   UI.toast(`<div class="toast-kicker">${first ? 'New species encountered · added to the encyclopedia' : 'New species encountered'}</div><b>${sp.name}</b><p>${sp.fact}</p>`);
   UI.setLife(world.contemporaries, world.met);
   sound.discover();
+};
+
+// Food the player reaches tops up the Food meter, up to a limit per generation.
+let fullNotice = null; // the generation we last said "well fed" in
+world.onEat = () => {
+  const gain = G.forage(game);
+  if (gain) {
+    UI.renderHUD(game);
+    sound.eat();
+  } else if (fullNotice !== `${game.era}:${game.generation}`) {
+    fullNotice = `${game.era}:${game.generation}`;
+    UI.toast(`<div class="toast-kicker">Well fed</div>Your kin have eaten their fill (+${FORAGE_CAP} food per generation at most). Live a generation to forage again.`, 4000);
+  }
+};
+
+// Predators of the era now and then hunt the player: outrun them, or trust your armor.
+world.onHuntStart = (sp) => {
+  UI.toast(`<div class="toast-kicker">⚠ A predator is hunting you</div><b>${sp.name}</b>. ${world.aquatic ? 'Swim' : 'Run'} away!`, 4000);
+  sound.danger();
+};
+world.onBite = (sp) => {
+  const r = G.predatorAttack(game);
+  UI.renderHUD(game);
+  if (r.blocked) {
+    UI.toast(`🛡️ Your defenses held: <b>${sp.name}</b> gave up.`, 3500);
+    UI.log(`🛡️ Attacked by <b>${sp.name}</b>, but your defenses held.`);
+    sound.blocked();
+  } else {
+    UI.toast(`<div class="toast-kicker">Caught</div><b>${sp.name}</b> took ${UI.fmtPop(r.lost)} of your kind.`, 3500);
+    UI.log(`🩸 Caught by <b>${sp.name}</b>: <span class="bad">-${UI.fmtPop(r.lost)}</span>.`);
+    sound.bite();
+  }
+};
+world.onHuntEnd = (sp) => {
+  UI.toast(`💨 You escaped from <b>${sp.name}</b>.`, 3000);
+  UI.log(`💨 Escaped from <b>${sp.name}</b>.`);
 };
 
 // Browsers only allow audio after a user gesture.
@@ -54,6 +90,7 @@ function titleScreen() {
   setHabitat();
   world.setCreature(game);
   document.getElementById('hud').hidden = true;
+  world.active = false;
   joystick.show(false);
   sound.duck(1);
   titleModal();
@@ -100,6 +137,7 @@ function titleModal() {
 
 function startEra() {
   const era = ERAS[game.era];
+  world.active = false;
   setHabitat();
   world.setCreature(game);
   UI.renderHUD(game);
@@ -124,6 +162,7 @@ function startEra() {
       sound.evolve();
       UI.renderHUD(game);
       UI.banner(`${c.icon} ${c.name}`);
+      world.active = true;
       livePhase();
     },
   });
@@ -172,6 +211,7 @@ function eventPhase() {
   UI.setActions('<button class="primary big danger" id="face">⚠ Face what is coming</button>', {
     buttons: {
       '#face': async () => {
+        world.active = false;
         UI.setActions('');
         UI.hideWarning();
         UI.banner(`${ev.icon} ${ev.name}`, 3200);
@@ -201,6 +241,7 @@ function nextEra() {
 }
 
 function ending() {
+  world.active = false;
   UI.setActions('');
   UI.renderHUD(game);
   const won = game.status === 'survived';

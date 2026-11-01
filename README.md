@@ -18,9 +18,10 @@ Then open http://localhost:8000. There is no build step. Three.js loads from a C
 
 - **Eras and forks:** each era opens with a major evolutionary choice (carnivore/omnivore/herbivore, shell or speed, exoskeleton or spine, land or sea…), followed by generations where you pick minor mutations, including diet specializations from generalist to hyper-specialist.
 - **Survival meters:** food, water and oxygen drain each generation. Let one run dry and your population shrinks.
-- **Predators:** from the second era on, predators take a share of your population every generation. Defense, and to a lesser degree size, cut their toll; a well-armored species is left alone.
+- **Predators:** from the second era on, predators take a share of your population every generation. Defense, and to a lesser degree size, cut their toll; a well-armored species is left alone. From Body Plans on, a real predator of the era sometimes hunts you (marked in red): outrun it with Speed, or trust your armor.
+- **Foraging:** food that suits your diet is scattered around the world. Swim or walk to it to top up your Food meter, up to a limit per generation.
 - **Mass extinctions:** each one is foreshadowed during its era. Survival depends on your traits, and the result screen shows exactly what helped and what hurt.
-- **Era life:** the world is populated with real prehistoric species of each era, from trilobites and Anomalocaris to sauropods and mammoths. Get close to one to learn about it.
+- **Era life:** the world is populated with real prehistoric species of each era, from trilobites and Anomalocaris to sauropods and mammoths. Get close to one to learn about it and add it to the prehistory encyclopedia, which also hints where to find the ones you have not met yet.
 - **Music and sound:** generated in code with the Web Audio API, so there are no audio files.
 
 ## Code

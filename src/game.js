@@ -2,7 +2,7 @@
 
 import {
   START, CHOICES, ERAS, EVENTS, MIN_VIABLE_POPULATION, GENERATIONS_PER_ERA,
-  TIER_EFFICIENCY, OMNIVORE_EFFICIENCY, PRESENT_DAY_MYA, PREDATION, PREDATION_SAFE,
+  TIER_EFFICIENCY, OMNIVORE_EFFICIENCY, PRESENT_DAY_MYA, PREDATION, PREDATION_SAFE, FORAGE_BITE, FORAGE_CAP, BITE_SHARE,
 } from './data.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -29,6 +29,7 @@ export function createGame({ name, rng = Math.random } = {}) {
     meters: { ...START.meters },
     tags: new Set(START.tags),
     diet: null,
+    foraged: 0, // food collected by hand this generation
     world: { shock: {}, oxygen: 1, wetness: 1 },
     history: [],
     status: 'alive', // alive | extinct | survived
@@ -231,6 +232,7 @@ export function simulateGeneration(g) {
   g.world.wetness += (1 - g.world.wetness) * 0.4;
 
   g.generation += 1;
+  g.foraged = 0;
   const era = ERAS[g.era];
   const nextMya = ERAS[g.era + 1]?.mya ?? PRESENT_DAY_MYA;
   g.mya = era.mya - ((era.mya - nextMya) * g.generation) / (GENERATIONS_PER_ERA + 1);
@@ -240,6 +242,24 @@ export function simulateGeneration(g) {
     g.causeOfDeath = starvationCause(g);
   }
   return { before, after: { ...g.meters, population: g.population }, income, drain, availability, health, eaten };
+}
+
+/** The player reached a food item. Returns the food gained (0 once full for this generation). */
+export function forage(g) {
+  if (g.status !== 'alive') return 0;
+  const gain = Math.min(FORAGE_BITE, FORAGE_CAP - g.foraged, 100 - g.meters.food);
+  if (gain <= 0) return 0;
+  g.meters.food += gain;
+  g.foraged += gain;
+  return gain;
+}
+
+/** A hunting predator caught the player. Defense and size limit the losses; it never ends the game. */
+export function predatorAttack(g) {
+  const share = predation(g) * BITE_SHARE;
+  const lost = Math.max(0, Math.min(Math.round(g.population * share), g.population - MIN_VIABLE_POPULATION));
+  g.population -= lost;
+  return { lost, blocked: share === 0 };
 }
 
 function starvationCause(g) {

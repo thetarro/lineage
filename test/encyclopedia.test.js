@@ -2,7 +2,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SPECIES, speciesByEra, lifeFor } from '../src/species.js';
+import { SPECIES, speciesByEra, lifeFor, whereToFind } from '../src/species.js';
 import { ENTRIES } from '../src/encyclopedia-entries.js';
 import { ERAS } from '../src/data.js';
 
@@ -40,4 +40,16 @@ test('every species has a complete encyclopedia entry', () => {
 
 test('every encyclopedia entry belongs to a species in the game', () => {
   for (const id of Object.keys(ENTRIES)) assert.ok(inGame.has(id), `entry "${id}" has no species in the game`);
+});
+
+test('every species can be found somewhere, for the encyclopedia hints', () => {
+  for (const id of inGame) assert.ok(whereToFind(id).length > 0, `no era or habitat lists "${id}"`);
+});
+
+test('from Body Plans on, every sea era has a predator that can hunt the player', () => {
+  for (let era = 2; era < ERAS.length; era++) {
+    const hunters = lifeFor(era, 'water').filter(([id]) => SPECIES[id].predator && SPECIES[id].kind !== 'walker');
+    assert.ok(hunters.length > 0, `era ${era} has no sea predators`);
+  }
+  for (const [id, sp] of Object.entries(SPECIES)) if (sp.predator) assert.notEqual(sp.kind, 'plant', `${id} is a plant`);
 });

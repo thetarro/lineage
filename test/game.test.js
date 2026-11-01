@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as G from '../src/game.js';
-import { CHOICES, ERAS, EVENTS, GENERATIONS_PER_ERA } from '../src/data.js';
+import { CHOICES, ERAS, EVENTS, GENERATIONS_PER_ERA, FORAGE_CAP, MIN_VIABLE_POPULATION } from '../src/data.js';
 
 /** A game after taking these choices, advancing one era per choice like the fork phase. */
 function lineage(ids) {
@@ -199,6 +199,39 @@ test('a well-defended species outgrows an undefended one', () => {
   const weak = grow(1), strong = grow(9);
   assert.ok(weak.eaten > 0 && strong.eaten === 0);
   assert.ok(strong.pop > weak.pop);
+});
+
+// ── Foraging and hunts ─────────────────────────────────────────────────────
+
+test('foraging tops up food, up to a limit per generation', () => {
+  const g = lineage(['herbivore']);
+  g.meters.food = 40;
+  let total = 0;
+  for (let i = 0; i < 20; i++) total += G.forage(g);
+  assert.equal(total, FORAGE_CAP);
+  assert.equal(G.forage(g), 0, 'nothing more until the next generation');
+  G.simulateGeneration(g);
+  g.meters.food = 40;
+  assert.ok(G.forage(g) > 0, 'a new generation can forage again');
+  g.meters.food = 100;
+  assert.equal(G.forage(g), 0, 'a full meter cannot go higher');
+});
+
+test('a predator catching the player costs population, unless defenses hold', () => {
+  const weak = lineage(['carnivore', 'speed']);
+  const before = weak.population;
+  const bite = G.predatorAttack(weak);
+  assert.ok(bite.lost > 0 && !bite.blocked);
+  assert.equal(weak.population, before - bite.lost);
+
+  const armored = lineage(['carnivore', 'shell']);
+  armored.traits.defense = 9;
+  assert.deepEqual(G.predatorAttack(armored), { lost: 0, blocked: true });
+
+  const tiny = lineage(['carnivore', 'speed']);
+  tiny.population = MIN_VIABLE_POPULATION + 10;
+  G.predatorAttack(tiny);
+  assert.ok(tiny.population >= MIN_VIABLE_POPULATION, 'a bite never ends the game by itself');
 });
 
 // ── Whole games ────────────────────────────────────────────────────────────
