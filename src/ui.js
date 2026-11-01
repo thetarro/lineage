@@ -5,6 +5,9 @@ import { carryingCapacity, upcomingEvent, habitat } from './game.js';
 
 const $ = (id) => document.getElementById(id);
 
+/** Escape text (like a typed species name) for use inside HTML. */
+export const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
 export const fmtPop = (n) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : `${n}`);
 export const fmtMya = (m) => (m <= 0 ? 'Present day' : m < 10 ? `${m.toFixed(1)} million years ago` : `${Math.round(m).toLocaleString()} million years ago`);
 const pct = (v) => `${v >= 0 ? '+' : ''}${Math.round(v * 100)}%`;

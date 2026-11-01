@@ -316,6 +316,35 @@ button.codex-tile:hover { transform: translateY(-3px); border-color: var(--accen
 .codex-tile.locked { color: var(--muted); opacity: 0.75; cursor: not-allowed; }
 .codex-where { font-weight: 400; font-size: 10.5px; color: var(--muted); }
 
+/* Ending epilogue and past lineages. */
+.epilogue {
+  display: flex; align-items: center; gap: 14px; text-align: left; max-width: 520px; margin: 14px auto;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border); border-radius: 14px; padding: 12px 16px;
+}
+.epilogue-icon { font-size: 40px; }
+.epilogue-kicker { color: var(--accent); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.epilogue b { font-size: 17px; }
+.epilogue p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.new-record { color: var(--warn); font-weight: 700; }
+.records { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin: 14px 0; }
+.record { background: rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.record span { color: var(--muted); font-size: 11.5px; }
+.record b { color: var(--accent); font-size: 20px; font-variant-numeric: tabular-nums; }
+.record em { font-size: 12.5px; overflow-wrap: anywhere; }
+.runs { display: grid; gap: 6px; }
+.run {
+  display: flex; align-items: center; gap: 12px; text-align: left; width: 100%;
+  background: rgba(12, 28, 40, 0.92); border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px;
+  transition: border-color 0.15s;
+}
+.run:hover { border-color: var(--accent); }
+.run-icon { font-size: 22px; }
+.run-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.run-main b { font-style: italic; overflow-wrap: anywhere; }
+.run-main small, .run-stats small { color: var(--muted); font-size: 11.5px; }
+.run-stats { display: flex; flex-direction: column; align-items: flex-end; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gallery h2 i { font-weight: 700; }
+
 .codex-entry { max-width: 620px; margin: 0 auto; }
 .codex-hero { display: block; width: min(360px, 100%); aspect-ratio: 4 / 3; object-fit: contain; margin: 4px auto 0; }
 .codex-entry h2 { text-align: center; margin: 4px 0 14px; font-size: 26px; }

@@ -16,7 +16,9 @@ Then open http://localhost:8000. There is no build step. Three.js loads from a C
 
 ## How it works
 
-- **Eras and forks:** each era opens with a major evolutionary choice (carnivore/omnivore/herbivore, shell or speed, exoskeleton or spine, land or sea…), followed by generations where you pick minor mutations, including diet specializations from generalist to hyper-specialist.
+- **Eras and forks:** each era opens with a major evolutionary choice (carnivore/omnivore/herbivore, shell or speed, exoskeleton, spine or tentacles, land or sea…), followed by generations where you pick minor mutations, including diet specializations from generalist to hyper-specialist.
+- **Branches:** vertebrates on land (cold- or warm-blooded, then fur, feathers, flight or intelligence), arthropods on land (insects or arachnids), amphibians at the water's edge (who may become reptiles), cephalopods (ammonites or squid), and sea life in the deep or on reefs, which may even take to the air as gliders.
+- **Your lineage today:** the ending screen names the real living group your lineage resembles, and every finished game is kept in the past lineages gallery, with records to beat.
 - **Survival meters:** food, water and oxygen drain each generation. Let one run dry and your population shrinks.
 - **Predators:** from the second era on, predators take a share of your population every generation. Defense, and to a lesser degree size, cut their toll; a well-armored species is left alone. From Body Plans on, a real predator of the era sometimes hunts you (marked in red): outrun it with Speed, or trust your armor.
 - **Foraging:** food that suits your diet is scattered around the world. Swim or walk to it to top up your Food meter, up to a limit per generation.

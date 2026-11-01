@@ -73,7 +73,7 @@ def play(page, url, want=(), stop_at=None):
             page.click('#continue')
         elif visible(page, '#face'):
             page.click('#face')
-            page.wait_for_selector('#continue', state='visible', timeout=15000)
+            page.wait_for_selector('#continue', state='visible', timeout=45000)  # slow on busy machines with software rendering
         elif visible(page, '#live'):
             page.click('#live')
         elif visible(page, '#actions .card'):
@@ -150,9 +150,28 @@ def main():
                     break
             check(radiation == ['insectWings', 'arachnid'], f'exoskeleton on land offers Wings or Eight Legs (try {attempt})')
 
+            check(dict(eras).get('Body Plans') == ['exoskeleton', 'spine', 'tentacles'], 'Body Plans offers tentacles as a third body plan')
+
             print('A full game')
+            saved = lambda: page.evaluate("JSON.parse(localStorage.getItem('lineage.runs') || '[]').length")
+            runs_before = saved()
             eras, outcome = play(page, url)
             check(outcome in ('won', 'extinct'), f'reaches the ending screen ({outcome} after {len(eras)} eras)')
+            group = page.inner_text('#modal .epilogue b') if visible(page, '#modal .epilogue') else ''
+            check(bool(group), f'the ending names the living group the lineage resembles ({group or "missing"})')
+
+            print('Past lineages')
+            load(page, url, '#gallery')
+            check(saved() == runs_before + 1 and page.inner_text('#gallery').strip().endswith(str(runs_before + 1)), 'the finished game is saved and counted on the title screen')
+            page.click('#gallery')
+            page.wait_for_selector('.gallery')
+            check(page.locator('.run').count() == runs_before + 1, 'the gallery lists every finished game')
+            page.click('.run')
+            page.wait_for_selector('.gallery .tl')
+            check(page.locator('.gallery .tl-col').count() >= 2, "a past lineage's timeline can be opened")
+            page.click('#gallery-list')
+            page.click('#gallery-close')
+            page.wait_for_selector('#start')
 
             print('Phone layout')
             page.set_viewport_size({'width': 390, 'height': 844})
@@ -162,6 +181,10 @@ def main():
             page.click('#codex')
             page.wait_for_selector('.codex')
             check(not page.evaluate(overflow), 'encyclopedia fits without sideways scrolling')
+            page.click('#codex-close')
+            page.click('#gallery')
+            page.wait_for_selector('.gallery')
+            check(not page.evaluate(overflow), 'past lineages fit without sideways scrolling')
 
             check(not errors, f'no JavaScript errors{": " + json.dumps(errors) if errors else ""}')
             browser.close()

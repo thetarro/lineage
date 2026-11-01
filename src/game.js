@@ -1,7 +1,7 @@
 // Game state and simulation. Pure logic: no rendering, runnable in Node.
 
 import {
-  START, CHOICES, ERAS, EVENTS, MIN_VIABLE_POPULATION, GENERATIONS_PER_ERA,
+  START, CHOICES, ERAS, EVENTS, DESCENDANTS, MIN_VIABLE_POPULATION, GENERATIONS_PER_ERA,
   TIER_EFFICIENCY, OMNIVORE_EFFICIENCY, PRESENT_DAY_MYA, PREDATION, PREDATION_SAFE, FORAGE_BITE, FORAGE_CAP, BITE_SHARE,
 } from './data.js';
 
@@ -208,7 +208,8 @@ export function simulateGeneration(g) {
     const target = clamp(g.world.oxygen * 85 + (g.tags.has('gills') ? 15 : 0) - t.size, 0, 100);
     g.meters.oxygen += (target - g.meters.oxygen) * 0.6;
   } else {
-    const gain = g.world.wetness * 20 + (g.tags.has('waterRetention') ? 10 : 0) + t.adaptability;
+    const moist = (g.tags.has('waterRetention') ? 10 : 0) + (g.tags.has('amphibian') ? 12 : 0); // amphibians stay near water
+    const gain = g.world.wetness * 20 + moist + t.adaptability;
     g.meters.water = clamp(g.meters.water + gain - (8 + t.metabolism * 1.5), 0, 100);
     g.meters.oxygen += (90 - g.meters.oxygen) * 0.6;
   }
@@ -322,6 +323,14 @@ export function advanceEra(g) {
   g.mya = ERAS[g.era].mya;
   return true;
 }
+
+/** The living group this lineage resembles (for the ending screen). */
+export function descendants(g) {
+  return DESCENDANTS.find((d) => meetsRequirements(g, d.requires));
+}
+
+/** How many mass extinctions the lineage has lived through. */
+export const extinctionsSurvived = (g) => g.history.filter((h) => h.kind === 'event' && h.survived).length;
 
 export function lifespanMyr(g) {
   return ERAS[0].mya - g.mya;

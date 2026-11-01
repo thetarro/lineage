@@ -141,6 +141,45 @@ export const CHOICES = {
     name: 'Feathers', icon: '🪶', desc: 'Light, warm, and maybe one day... flight.',
     traits: { speed: 1, adaptability: 1 }, tags: ['feathers'],
   },
+  tentacles: {
+    name: 'Tentacles', icon: '🦑', desc: 'A soft body, a sharp beak and arms that grab. The way of the cephalopods.',
+    traits: { speed: 1, adaptability: 1, defense: -1 }, tags: ['cephalopod'],
+  },
+  // Cephalopods stay in the sea and choose their shell instead of a shore.
+  coiledShell: {
+    name: 'Coiled Shell', icon: '🌀', desc: 'A spiral shell of gas-filled chambers: float at any depth, like the ammonites.',
+    traits: { defense: 2, speed: -1 }, tags: ['coiledShell'],
+  },
+  jetPropulsion: {
+    name: 'Jet Propulsion', icon: '💨', desc: 'Lose the shell, squirt water to dart away, and hide behind a cloud of ink.',
+    traits: { speed: 3, defense: -1, metabolism: 1 }, tags: ['jet'],
+  },
+  // Vertebrates can also settle the water's edge, as amphibians.
+  amphibian: {
+    name: "Water's Edge", icon: '🏞️', desc: 'Live in both worlds: breathe air on land, but go back to the water to breed.',
+    traits: { adaptability: 2 }, tags: ['terrestrial', 'amphibian'], removeTags: ['aquatic'],
+  },
+  tadpoles: {
+    name: 'Tadpoles', icon: '🐸', desc: 'Lay soft eggs in ponds. The young swim as tadpoles, then climb out as frogs.',
+    traits: { reproduction: 3, metabolism: -1 }, tags: ['tadpoles'],
+  },
+  shelledEgg: {
+    name: 'Shelled Egg', icon: '🐊', desc: 'An egg with its own pond inside: no more need for water. The first reptiles.',
+    traits: { defense: 1, adaptability: 1 }, tags: ['coldBlooded', 'amniote'], removeTags: ['amphibian'],
+  },
+  poisonSkin: {
+    name: 'Poison Skin', icon: '⚠️', desc: 'Bright colors that warn: anything that eats you regrets it.',
+    traits: { defense: 3 }, tags: ['poisonSkin'],
+  },
+  aestivation: {
+    name: 'Mud Sleep', icon: '🟤', desc: 'Bury yourself in mud and sleep through droughts and hard times.',
+    traits: { metabolism: -1, adaptability: 1 }, tags: ['burrower', 'aestivation'],
+  },
+  glide: {
+    name: 'Gliding Fins', icon: '🪽', desc: 'Burst out of the water and glide on wing-like fins, far from the jaws below.',
+    traits: { speed: 3, size: -1 }, tags: ['glider'],
+  },
+
   // Arthropods on land take these forks instead of the vertebrate ones.
   insectWings: {
     name: 'Wings', icon: '🪰', desc: 'Flaps of cuticle become the first wings on Earth. The sky is empty.',
@@ -438,13 +477,17 @@ export const ERAS = [
   {
     name: 'Body Plans', mya: 540,
     blurb: 'An explosion of shapes fills the seas. What will your body be built on?',
-    forks: [{ options: ['exoskeleton', 'spine'], title: 'Choose a body plan' }],
+    forks: [{ options: ['exoskeleton', 'spine', 'tentacles'], title: 'Choose a body plan' }],
     event: 'ordovicianIce',
   },
   {
     name: 'The Shoreline', mya: 420,
     blurb: 'Green life creeps onto bare rock. The land is empty and waiting.',
-    forks: [{ options: ['stayWater', 'goLand'], title: 'Stay or go?' }],
+    forks: [
+      { requires: { tags: ['cephalopod'] }, options: ['coiledShell', 'jetPropulsion'], title: 'Shell or jet?' },
+      { requires: { tags: ['spine'] }, options: ['stayWater', 'amphibian', 'goLand'], title: 'Stay, straddle or go?' },
+      { options: ['stayWater', 'goLand'], title: 'Stay or go?' },
+    ],
     event: 'oceanAnoxia',
   },
   {
@@ -453,6 +496,7 @@ export const ERAS = [
     forks: [
       { requires: { habitat: 'aquatic' }, options: ['deepSea', 'reef'], title: 'Where in the sea?' },
       { requires: { habitat: 'terrestrial', tags: ['exoskeleton'] }, options: ['insectWings', 'arachnid'], title: 'Six legs or eight?' },
+      { requires: { tags: ['amphibian'] }, options: ['tadpoles', 'shelledEgg'], title: 'Pond or egg?' },
       { requires: { habitat: 'terrestrial' }, options: ['coldBlooded', 'warmBlooded'], title: 'How will you stay warm?' },
     ],
     event: 'greatDying',
@@ -465,6 +509,7 @@ export const ERAS = [
       { requires: { tags: ['reef'] }, options: ['schooling', 'symbiosis'], title: 'Life on the reef' },
       { requires: { tags: ['insect'] }, options: ['metamorphosis', 'colony'], title: 'How will you raise your young?' },
       { requires: { tags: ['arachnid'] }, options: ['silk', 'trapdoor'], title: 'How will you catch your food?' },
+      { requires: { tags: ['tadpoles'] }, options: ['poisonSkin', 'aestivation'], title: 'How will you survive?' },
       { requires: { tags: ['coldBlooded'] }, options: ['eggs', 'liveBirth'], title: 'How will you reproduce?' },
       { requires: { tags: ['warmBlooded'] }, options: ['fur', 'feathers'], title: 'What will keep you warm?' },
     ],
@@ -474,7 +519,8 @@ export const ERAS = [
     name: 'Apex', mya: 65,
     blurb: 'An age of giants and minds. The final test approaches.',
     forks: [
-      { requires: { habitat: 'aquatic' }, options: ['giant', 'swarm'], title: 'Final form' },
+      { requires: { habitat: 'aquatic' }, options: ['giant', 'swarm', 'glide'], title: 'Final form' },
+      { requires: { tags: ['tadpoles'] }, options: ['giant', 'swarm'], title: 'Final form' },
       { requires: { habitat: 'terrestrial', tags: ['exoskeleton'] }, options: ['swarm', 'diapause'], title: 'Final form' },
       { requires: { habitat: 'terrestrial' }, options: ['flight', 'intelligence'], title: 'Final form' },
     ],
@@ -571,6 +617,8 @@ export const EVENTS = {
       { tag: 'warmBlooded', value: -0.05, label: 'Heat stress' },
       { tag: 'coldBlooded', value: 0.05, label: 'Tolerates heat' },
       { tag: 'insect', value: -0.08, label: 'The only mass extinction of insects' },
+      { tag: 'coiledShell', value: -0.08, label: 'Only a few ammonite lines pull through' },
+      { tag: 'tadpoles', value: -0.05, label: 'Ponds turn acidic' },
     ],
     shock: { plants: 0.4, prey: 0.5, shellfish: 0.2, carrion: 1.8 },
     oxygen: 0.6, wetness: 0.5,
@@ -598,6 +646,9 @@ export const EVENTS = {
       { tag: 'colony', value: 0.05, label: 'Food stored in the nest' },
       { tag: 'silk', value: 0.05, label: 'Webs catch whatever still moves' },
       { tag: 'schooling', value: 0.12, label: 'Safety in numbers' },
+      { tag: 'coiledShell', value: -0.15, label: 'Ammonites vanish with the dinosaurs' },
+      { tag: 'jet', value: 0.08, label: 'Quick, clever hunters adapt' },
+      { tag: 'tadpoles', value: 0.1, label: 'Freshwater ponds shelter the young' },
       { tag: 'symbiosis', value: 0.12, label: 'Partners share what food is left' },
     ],
     shock: { plants: 0.15, fruit: 0.05, nectar: 0.05, prey: 0.4, carrion: 2.0, insects: 0.7, plankton: 0.5 },
@@ -623,9 +674,62 @@ export const EVENTS = {
       { tag: 'liveBirth', value: 0.05, label: 'Young kept warm' },
       { tag: 'exoskeleton', habitat: 'terrestrial', value: -0.2, label: 'Cold-blooded in the cold' },
       { tag: 'diapause', value: 0.12, label: 'Sleeps through the winters' },
+      { tag: 'amphibian', value: -0.1, label: 'Moist skin freezes' },
+      { tag: 'aestivation', value: 0.1, label: 'Sleeps out the winters in mud' },
       { tag: 'colony', value: 0.05, label: 'The colony huddles for warmth' },
     ],
     shock: { plants: 0.4, fruit: 0.2, nectar: 0.1 },
     wetness: 0.6,
   },
 };
+
+// ---------------------------------------------------------------------------
+// "Your lineage today": the real living group a lineage resembles, shown on the
+// ending screen. The first entry whose `requires` matches wins (same fields as choices).
+// ---------------------------------------------------------------------------
+
+export const DESCENDANTS = [
+  // Cephalopods
+  { requires: { tags: ['cephalopod', 'coiledShell'] }, icon: '🐚', name: 'The chambered nautilus', fact: 'The last shelled cephalopods, barely changed in 500 million years.' },
+  { requires: { tags: ['cephalopod', 'giant'] }, icon: '🦑', name: 'Giant and colossal squid', fact: 'Their eyes, the size of dinner plates, are the largest in the animal kingdom.' },
+  { requires: { tags: ['cephalopod', 'glider'] }, icon: '🦑', name: 'Flying squid', fact: 'They jet out of the sea and glide on their fins for up to 30 meters.' },
+  { requires: { tags: ['cephalopod'] }, icon: '🐙', name: 'Squid, cuttlefish and octopuses', fact: 'Octopuses can solve puzzles, open jars and change color in a blink.' },
+  // Arthropods
+  { requires: { tags: ['insect', 'colony'] }, icon: '🐜', name: 'Ants, bees and termites', fact: 'There may be around 20 quadrillion ants alive right now.' },
+  { requires: { tags: ['insect', 'metamorphosis'] }, icon: '🦋', name: 'Butterflies and beetles', fact: 'Beetles alone make up about a quarter of all known animal species.' },
+  { requires: { tags: ['insect'] }, icon: '🪰', name: 'Dragonflies and mayflies', fact: 'Dragonflies catch over 90% of the prey they chase.' },
+  { requires: { tags: ['arachnid', 'silk'] }, icon: '🕷️', name: 'Spiders', fact: 'Weight for weight, spider silk is stronger than steel.' },
+  { requires: { tags: ['arachnid'] }, icon: '🦂', name: 'Scorpions and trapdoor spiders', fact: 'Some scorpions can go a whole year without eating.' },
+  { requires: { tags: ['exoskeleton', 'swarm'], habitat: 'aquatic' }, icon: '🦐', name: 'Krill', fact: 'Their swarms can be seen from space, and feed the largest whales.' },
+  { requires: { tags: ['exoskeleton', 'shell'], habitat: 'aquatic' }, icon: '🦀', name: 'Horseshoe crabs', fact: 'Living fossils older than the dinosaurs, with blue blood used to test medicines.' },
+  { requires: { tags: ['exoskeleton'], habitat: 'aquatic' }, icon: '🦞', name: 'Crabs and lobsters', fact: 'Lobsters keep growing their whole lives, and some live for over 100 years.' },
+  // Amphibians
+  { requires: { tags: ['poisonSkin'] }, icon: '🐸', name: 'Poison dart frogs', fact: 'One golden poison frog carries enough toxin to kill ten people.' },
+  { requires: { tags: ['tadpoles', 'giant'] }, icon: '🦎', name: 'Giant salamanders', fact: 'The Chinese giant salamander can grow to 1.8 m long.' },
+  { requires: { tags: ['tadpoles'] }, icon: '🐸', name: 'Frogs and salamanders', fact: 'Some frogs freeze solid in winter and thaw out alive in spring.' },
+  // Land vertebrates
+  { requires: { tags: ['fur', 'intelligence'] }, icon: '🐒', name: 'Primates, and one day, people', fact: 'Your lineage would go on to wonder where it came from.' },
+  { requires: { tags: ['fur', 'flight'] }, icon: '🦇', name: 'Bats', fact: 'One in five mammal species is a bat.' },
+  { requires: { tags: ['fur'] }, icon: '🦊', name: 'Mammals', fact: 'From the bumblebee bat to the blue whale, all feed their young on milk.' },
+  { requires: { tags: ['feathers', 'flight'] }, icon: '🐦', name: 'Birds', fact: 'Birds are living dinosaurs: over 10,000 species of them.' },
+  { requires: { tags: ['feathers', 'intelligence'] }, icon: '🦜', name: 'Crows and parrots', fact: 'Crows make tools, and remember the faces of people who wronged them.' },
+  { requires: { tags: ['feathers'] }, icon: '🦤', name: 'Flightless birds, like ostriches', fact: 'Ostriches can run at 70 km/h.' },
+  { requires: { tags: ['coldBlooded', 'flight'] }, icon: '🦎', name: 'Gliding lizards', fact: 'Draco lizards glide between trees on wings of stretched skin.' },
+  { requires: { tags: ['coldBlooded', 'intelligence'] }, icon: '🦎', name: 'Monitor lizards', fact: 'Monitor lizards can count, and learn to recognize their keepers.' },
+  { requires: { tags: ['coldBlooded', 'liveBirth'] }, icon: '🐍', name: 'Snakes and skinks', fact: 'Many snakes and skinks give birth to live young.' },
+  { requires: { tags: ['coldBlooded'] }, icon: '🐊', name: 'Lizards and crocodiles', fact: "Crocodiles' basic body plan has barely changed in 200 million years." },
+  { requires: { habitat: 'terrestrial' }, icon: '🦕', name: 'Land vertebrates', fact: 'Every land vertebrate descends from fish that crawled ashore.' },
+  // Sea vertebrates
+  { requires: { tags: ['glider'] }, icon: '🐟', name: 'Flying fish', fact: 'They can glide for up to 45 seconds above the waves.' },
+  { requires: { tags: ['bioluminescence'] }, icon: '🎣', name: 'Anglerfish', fact: 'They lure prey in the dark with a glowing fishing rod on their head.' },
+  { requires: { tags: ['deepSea', 'giant'] }, icon: '🦈', name: 'Greenland sharks', fact: 'They may live for over 400 years in the cold deep.' },
+  { requires: { tags: ['deepSea'] }, icon: '🐟', name: 'Deep-sea fish', fact: 'Some live under 8,000 meters of water.' },
+  { requires: { tags: ['symbiosis'] }, icon: '🐠', name: 'Clownfish', fact: 'They shelter among stinging anemones that their slimy skin protects them from.' },
+  { requires: { tags: ['schooling'] }, icon: '🐟', name: 'Sardines and herring', fact: 'Their shoals can stretch for kilometers.' },
+  { requires: { tags: ['giant', 'filterFeeder'] }, icon: '🦈', name: 'Whale sharks', fact: 'The largest fish alive, up to 18 m, feeds on plankton.' },
+  { requires: { tags: ['giant'], line: ['carnivore'] }, icon: '🦈', name: 'Great white sharks', fact: 'They can sense a drop of blood in 100 liters of water.' },
+  { requires: { tags: ['giant'] }, icon: '🐋', name: 'Whale sharks and whales', fact: 'The largest animals alive are gentle filter feeders.' },
+  // Lineages that never got past simple bodies.
+  { requires: { maxEra: 1 }, icon: '🪼', name: 'Sponges and jellyfish', fact: 'The simplest animals alive today, little changed since the dawn of animal life.' },
+  { requires: {}, icon: '🐟', name: 'Fish', fact: 'Half of all living vertebrates are fish.' },
+];

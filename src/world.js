@@ -827,6 +827,9 @@ function buildCreature(g) {
   if (tags.has('feathers')) color.lerp(new THREE.Color(0xc9955a), 0.3);
   if (tags.has('deepSea')) color.lerp(new THREE.Color(0x553366), 0.35);
   if (tags.has('coldBlooded')) color.lerp(new THREE.Color(0x4a7a4a), 0.3);
+  if (tags.has('amphibian')) color.lerp(new THREE.Color(0x5a9a4a), 0.4);
+  if (tags.has('poisonSkin')) color.lerp(new THREE.Color(0xff6a10), 0.75);
+  if (tags.has('cephalopod')) color.lerp(new THREE.Color(0xd9826a), 0.35);
 
   let scale = 0.55 + g.traits.size * 0.12;
   if (tags.has('giant')) scale *= 1.7;
@@ -876,10 +879,22 @@ function buildCreature(g) {
     dome.position.set(0, 0.22, front - 0.05);
     root.add(dome);
   }
-  const eyeR = tags.has('keenEyes') ? 0.13 : 0.09;
+  const eyeR = (tags.has('keenEyes') ? 0.13 : 0.09) * (tags.has('cephalopod') ? 1.4 : 1);
+  const eyeY = tags.has('amphibian') ? 0.23 : 0.14; // frogs' eyes bulge from the top of the head
   for (const side of [-1, 1]) {
+    if (tags.has('exoskeleton')) {
+      // Compound eyes: dark, glossy domes made of many facets.
+      const eye = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(eyeR * 1.4, 1),
+        new THREE.MeshStandardMaterial({ color: 0x2b3340, emissive: 0x16202c, metalness: 0.5, roughness: 0.25, flatShading: true }),
+      );
+      eye.position.set(side * 0.27, 0.16, front - 0.1);
+      eye.scale.set(0.8, 1, 1);
+      root.add(eye);
+      continue;
+    }
     const eye = new THREE.Mesh(new THREE.SphereGeometry(eyeR, 8, 6), mat(0xffffff, { flatShading: false }));
-    eye.position.set(side * 0.26, 0.14, front - 0.08);
+    eye.position.set(side * 0.26, eyeY, front - 0.08);
     const pupil = new THREE.Mesh(new THREE.SphereGeometry(eyeR * 0.5, 6, 4), mat(0x111111));
     pupil.position.set(side * eyeR * 0.5, 0, eyeR * 0.6);
     eye.add(pupil);
@@ -903,7 +918,8 @@ function buildCreature(g) {
 
   // Tail (feathered flyers and sea arthropods get a fan instead, below).
   let tailPivot = null;
-  if (!seaArthropod && (!tags.has('flight') || !tags.has('feathers'))) {
+  const cephalopod = tags.has('cephalopod');
+  if (!seaArthropod && !cephalopod && (!tags.has('flight') || !tags.has('feathers'))) {
     const pivot = new THREE.Group();
     tailPivot = pivot;
     pivot.position.z = -len * 0.45;
@@ -926,7 +942,7 @@ function buildCreature(g) {
   }
 
   // Armor.
-  if (tags.has('shell') && !seaArthropod) {
+  if (tags.has('shell') && !seaArthropod && !tags.has('cephalopod')) { // a cephalopod's shell is its coil, below
     const shell = new THREE.Mesh(
       new THREE.SphereGeometry(0.55, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2),
       mat(tags.has('pressureArmor') ? 0x3c3c48 : 0xc9a66b),
@@ -977,6 +993,17 @@ function buildCreature(g) {
       root.add(spike);
     }
   }
+  if (tags.has('poisonSkin')) {
+    const spotMat = mat(0x1a1a1a);
+    for (let i = 0; i < 9; i++) {
+      const spot = new THREE.Mesh(new THREE.SphereGeometry(0.085, 6, 4), spotMat);
+      const z = (i / 8 - 0.5) * len * 0.75, a = ((i * 1.7) % 2.2) - 1.1;
+      spot.position.set(Math.sin(a) * 0.36 * Math.sqrt(1 - (z / (len * 0.5)) ** 2), Math.cos(a) * 0.3, z);
+      spot.scale.set(1, 0.4, 1);
+      spot.lookAt(spot.position.clone().multiplyScalar(2));
+      root.add(spot);
+    }
+  }
   if (tags.has('fur')) addFur(root, tailPivot && land ? tailPivot : null, { len, front, color });
   if (tags.has('feathers')) addFeathers(root, tags.has('flight') ? null : tailPivot, { len, front, color, flying: tags.has('flight') });
   if (tags.has('bioluminescence')) {
@@ -996,8 +1023,27 @@ function buildCreature(g) {
 
   // Locomotion: fins in water, legs on land, wings in the air.
   let legHeight = 0.35;
+  if (cephalopod) addCephalopod(root, parts, { len, front, color, tags });
+  if (tags.has('glider')) {
+    // Long, wing-like fins for gliding over the waves.
+    const finMat = mat(color.clone().lerp(new THREE.Color(0xdff4ff), 0.35), { side: THREE.DoubleSide });
+    for (const side of [-1, 1]) {
+      const pivot = new THREE.Group();
+      pivot.position.set(side * 0.3, 0.05, front * 0.25);
+      pivot.userData.side = side;
+      const s = new THREE.Shape();
+      s.moveTo(0, -0.05);
+      s.quadraticCurveTo(0.7, 0.05, 1.1, 0.35);
+      s.quadraticCurveTo(0.5, 0.45, 0, 0.35);
+      const fin = new THREE.Mesh(flatGeo(s), finMat);
+      fin.scale.x = side;
+      pivot.add(fin);
+      root.add(pivot);
+      parts.flap.push(pivot);
+    }
+  }
   if (!land) {
-    for (const side of seaArthropod ? [] : [-1, 1]) {
+    for (const side of seaArthropod || cephalopod || tags.has('glider') ? [] : [-1, 1]) {
       const pivot = new THREE.Group();
       pivot.position.set(side * 0.35, -0.05, front * 0.3);
       pivot.userData.side = side;
@@ -1013,7 +1059,7 @@ function buildCreature(g) {
     const arthropod = tags.has('exoskeleton');
     const pairs = !arthropod ? 2 : tags.has('arachnid') ? 4 : 3;
     const legLen = arthropod ? 0.75 : 0.55;
-    const splay = arthropod ? 0.75 : 0;
+    const splay = arthropod ? 0.75 : tags.has('amphibian') ? 0.55 : 0; // amphibians sprawl
     legHeight = 0.2 + legLen * Math.cos(splay);
     for (const side of [-1, 1]) {
       for (let k = 0; k < pairs; k++) {
@@ -1065,6 +1111,73 @@ function buildCreature(g) {
 
   root.traverse((o) => { o.castShadow = true; });
   return { root, parts, scale, legHeight };
+}
+
+// ── Cephalopods ─────────────────────────────────────────────────────────
+
+/**
+ * A cephalopod: eight arms reaching forward from the head (two long feeding tentacles
+ * after Jet Propulsion, plus fins on the mantle), or a coiled, chambered ammonite shell.
+ */
+function addCephalopod(root, parts, { len, front, color, tags }) {
+  const armMat = mat(color.clone().multiplyScalar(0.85));
+  const suckerMat = mat(color.clone().lerp(new THREE.Color(0xffffff), 0.45));
+  const jet = tags.has('jet');
+  for (let i = 0; i < (jet ? 10 : 8); i++) {
+    const long = jet && i >= 8; // the two feeding tentacles
+    const a = long ? (i === 8 ? -0.5 : 0.5) : ((i + 0.5) / 8) * Math.PI * 2;
+    const pivot = new THREE.Group();
+    pivot.position.set(Math.cos(a) * 0.18, Math.sin(a) * 0.15 - 0.05, front - 0.02);
+    pivot.rotation.set(-Math.sin(a) * 0.35, Math.cos(a) * 0.35, 0);
+    const armLen = long ? 1.0 : 0.6;
+    const arm = new THREE.Mesh(new THREE.ConeGeometry(0.06, armLen, 5), armMat);
+    arm.rotation.x = Math.PI / 2;
+    arm.position.z = armLen / 2;
+    pivot.add(arm);
+    if (long) {
+      const club = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 4), suckerMat);
+      club.scale.set(1, 0.6, 1.8);
+      club.position.z = armLen * 0.85;
+      pivot.add(club);
+    }
+    root.add(pivot);
+    parts.flick.push(pivot);
+  }
+  if (jet) {
+    // A pointed mantle with two fins at the back.
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.6, 8), mat(color));
+    tip.rotation.x = -Math.PI / 2;
+    tip.position.z = -len * 0.5;
+    root.add(tip);
+    for (const side of [-1, 1]) {
+      const pivot = new THREE.Group();
+      pivot.position.set(side * 0.1, 0, -len * 0.45);
+      pivot.userData.side = side;
+      const s = new THREE.Shape();
+      s.moveTo(0, -0.15);
+      s.quadraticCurveTo(0.45, 0.05, 0, 0.35);
+      const fin = new THREE.Mesh(flatGeo(s), mat(color, { side: THREE.DoubleSide }));
+      fin.scale.x = side;
+      pivot.add(fin);
+      root.add(pivot);
+      parts.flap.push(pivot);
+    }
+  } else if (tags.has('coiledShell')) {
+    // An ammonite's coil: chambers growing along a spiral, banded in cream and brown.
+    const shell = new THREE.Group();
+    const cream = mat(0xe8d9b5), brown = mat(0x9a6a3f);
+    for (let i = 0; i < 22; i++) {
+      const th = i * 0.45;
+      const r = 0.06 * Math.exp(0.11 * th);
+      const chamber = new THREE.Mesh(new THREE.SphereGeometry(0.05 + r * 0.55, 8, 6), i % 3 ? cream : brown);
+      chamber.position.set(0, Math.sin(th) * r, -Math.cos(th) * r);
+      shell.add(chamber);
+    }
+    // Big enough that the body seems to peek out of it, as an ammonite's did.
+    shell.position.set(0, 0.05, -len * 0.25);
+    shell.scale.setScalar(3);
+    root.add(shell);
+  }
 }
 
 // ── Coats ───────────────────────────────────────────────────────────────

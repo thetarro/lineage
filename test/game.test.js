@@ -201,6 +201,63 @@ test('a well-defended species outgrows an undefended one', () => {
   assert.ok(strong.pop > weak.pop);
 });
 
+// ── New branches ───────────────────────────────────────────────────────────
+
+test('cephalopods choose a shell or a jet instead of a shore, and stay in the sea', () => {
+  const g = lineage(['carnivore', 'shell', 'tentacles']);
+  assert.deepEqual(G.forkFor(g).options, ['coiledShell', 'jetPropulsion']);
+  G.applyChoice(g, 'coiledShell', 'fork');
+  G.advanceEra(g);
+  assert.equal(G.habitat(g), 'aquatic');
+  assert.deepEqual(G.forkFor(g).options, ['deepSea', 'reef']);
+  assert.ok(modLabels(lineage(['carnivore', 'shell', 'tentacles', 'coiledShell', 'deepSea']), 'meteor').includes('Ammonites vanish with the dinosaurs'));
+});
+
+test('vertebrates can settle the water\'s edge; a shelled egg makes them reptiles', () => {
+  assert.deepEqual(G.forkFor(lineage(['herbivore', 'shell', 'spine'])).options, ['stayWater', 'amphibian', 'goLand']);
+  assert.deepEqual(G.forkFor(lineage(['herbivore', 'shell', 'exoskeleton'])).options, ['stayWater', 'goLand']);
+  const frog = lineage(['herbivore', 'shell', 'spine', 'amphibian']);
+  assert.equal(G.habitat(frog), 'terrestrial');
+  assert.deepEqual(G.forkFor(frog).options, ['tadpoles', 'shelledEgg']);
+  assert.deepEqual(G.forkFor(lineage(['herbivore', 'shell', 'spine', 'amphibian', 'tadpoles'])).options, ['poisonSkin', 'aestivation']);
+  assert.deepEqual(G.forkFor(lineage(['herbivore', 'shell', 'spine', 'amphibian', 'tadpoles', 'poisonSkin'])).options, ['giant', 'swarm']);
+  const reptile = lineage(['herbivore', 'shell', 'spine', 'amphibian', 'shelledEgg']);
+  assert.ok(reptile.tags.has('coldBlooded') && !reptile.tags.has('amphibian'));
+  assert.deepEqual(G.forkFor(reptile).options, ['eggs', 'liveBirth']);
+});
+
+test('amphibians keep moist near water', () => {
+  const water = (ids) => { const g = lineage(ids); g.meters.water = 50; G.simulateGeneration(g); return g.meters.water; };
+  assert.ok(water(['herbivore', 'shell', 'spine', 'amphibian']) > water(['herbivore', 'shell', 'spine', 'goLand']));
+});
+
+test('every sea lineage can end as a glider', () => {
+  for (const ids of [['omnivore', 'shell', 'spine', 'stayWater', 'reef', 'schooling'], ['omnivore', 'shell', 'tentacles', 'jetPropulsion', 'deepSea', 'bioluminescence']]) {
+    assert.ok(G.forkFor(lineage(ids)).options.includes('glide'), ids.join(' > '));
+  }
+});
+
+// ── Your lineage today ─────────────────────────────────────────────────────
+
+test('every lineage that reaches the present day resembles a specific living group', () => {
+  const generic = ['Fish', 'Land vertebrates'];
+  const walk = (ids) => {
+    const g = lineage(ids);
+    if (g.status === 'survived') {
+      const d = G.descendants(g);
+      assert.ok(d && !generic.includes(d.name), `${ids.join(' > ')} only matches "${d?.name}"`);
+      return;
+    }
+    for (const o of G.forkFor(g).options) walk([...ids, o]);
+  };
+  walk([]);
+});
+
+test('lineages that die early still get a sensible "might have been"', () => {
+  assert.equal(G.descendants(G.createGame()).name, 'Sponges and jellyfish');
+  assert.equal(G.descendants(lineage(['carnivore', 'shell', 'exoskeleton'])).name, 'Horseshoe crabs');
+});
+
 // ── Foraging and hunts ─────────────────────────────────────────────────────
 
 test('foraging tops up food, up to a limit per generation', () => {

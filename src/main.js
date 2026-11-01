@@ -8,6 +8,7 @@ import { Joystick } from './controls.js';
 import { Sound } from './audio.js';
 import { VERSION } from './version.js';
 import { openEncyclopedia, loadDiscovered, saveDiscovered, progress } from './encyclopedia.js';
+import { openGallery, loadRuns, runRecord, saveRun } from './gallery.js';
 
 const world = new World(document.getElementById('scene'));
 const joystick = new Joystick();
@@ -96,8 +97,6 @@ function titleScreen() {
   titleModal();
 }
 
-const attr = (s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-
 /** The title card itself; also where the encyclopedia returns to, keeping the typed name. */
 function titleModal() {
   const { found, total } = progress(discovered);
@@ -106,11 +105,12 @@ function titleModal() {
       <h1>LINEAGE</h1>
       <p class="tagline">Every species goes extinct.<br>How long will yours last?</p>
       <label class="name-field">Name your species
-        <span><input id="species-name" value="${attr(game.name)}" maxlength="40"><button id="reroll" title="Random name">🎲</button></span>
+        <span><input id="species-name" value="${UI.esc(game.name)}" maxlength="40"><button id="reroll" title="Random name">🎲</button></span>
       </label>
       <div class="title-buttons">
         <button class="primary" id="start">Begin as a single cell</button>
         <button class="secondary" id="codex">📖 Encyclopedia <small>${found}/${total}</small></button>
+        <button class="secondary" id="gallery">🏛️ Past lineages <small>${loadRuns().length}</small></button>
       </div>
       <p class="hint">
         <span class="desktop">Swim, crawl or walk with the joystick or WASD · meet the life of each era · Space/Shift to rise and sink<br>Drag to orbit · scroll to zoom · M to mute</span>
@@ -123,6 +123,10 @@ function titleModal() {
       '#codex': () => {
         game.name = document.getElementById('species-name').value.trim() || game.name;
         openEncyclopedia(discovered, titleModal);
+      },
+      '#gallery': () => {
+        game.name = document.getElementById('species-name').value.trim() || game.name;
+        openGallery(titleModal);
       },
       '#start': () => {
         game.name = document.getElementById('species-name').value.trim() || game.name;
@@ -245,6 +249,8 @@ function ending() {
   UI.setActions('');
   UI.renderHUD(game);
   const won = game.status === 'survived';
+  const today = G.descendants(game);
+  const broken = saveRun(runRecord(game));
   joystick.show(false);
   if (won) sound.win();
   else sound.lose();
@@ -252,8 +258,17 @@ function ending() {
     <div class="ending ${won ? 'won' : 'dead'}">
       <div class="event-icon">${won ? '🏆' : '🦴'}</div>
       <h1>${won ? 'You reached the present day' : 'Extinct'}</h1>
-      <h3 class="species-name">${game.name}</h3>
+      <h3 class="species-name">${UI.esc(game.name)}</h3>
       <p>${won ? 'Your lineage survived every catastrophe Earth could throw at it.' : `Cause: <b>${game.causeOfDeath}</b>, ${UI.fmtMya(game.mya)}.`}</p>
+      <div class="epilogue">
+        <div class="epilogue-icon">${today.icon}</div>
+        <div>
+          <div class="epilogue-kicker">${won ? 'Your lineage today' : 'Had it survived, its descendants might have been'}</div>
+          <b>${today.name}</b>
+          <p>${today.fact}</p>
+        </div>
+      </div>
+      ${broken.length ? `<p class="new-record">🏅 New record: ${broken.join(', ')}!</p>` : ''}
       <div class="stats">
         <div><b>${Math.round(G.lifespanMyr(game)).toLocaleString()}</b><span>million years</span></div>
         <div><b>${UI.fmtPop(game.peakPopulation)}</b><span>peak population</span></div>
