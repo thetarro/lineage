@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "python3 serve.py 8000"
+    "start": "python3 serve.py 8000",
+    "test": "node --test",
+    "test:ui": "python3 test/ui_test.py"
   }
 }

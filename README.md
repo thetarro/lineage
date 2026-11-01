@@ -29,7 +29,21 @@ Then open http://localhost:8000. There is no build step. Three.js loads from a C
 | `src/data.js` | Game content: eras, choices, diets, extinction events (most balancing happens here) |
 | `src/game.js` | Rules and simulation, no rendering (runs in Node) |
 | `src/world.js` | Three.js scene, player creature builder, disaster effects |
-| `src/fauna.js` | Prehistoric animals and plants for each era |
+| `src/species.js` | Prehistoric species and which ones live in each era (data only) |
+| `src/fauna.js` | 3D models of the prehistoric animals and plants |
+| `src/encyclopedia.js`, `src/encyclopedia-entries.js` | The prehistory encyclopedia page, and its content for every species |
 | `src/audio.js` | Procedural music and sound effects |
 | `src/controls.js` | Joystick and keyboard input |
 | `src/ui.js`, `src/main.js` | HUD, cards, timeline and game flow |
+| `serve.py` | Local dev server used by `npm start` (disables browser caching) |
+
+## Testing
+
+```sh
+npm test          # game rules and content, in Node (no install needed)
+npm run test:ui   # plays the real game in headless Chromium (~2 minutes)
+```
+
+`npm test` runs the files in `test/*.test.js` with Node's built-in test runner. They check that every lineage gets a fork in every era, that all content references are valid, the rules for mutations, diets and extinction events, and 500 random full games.
+
+`npm run test:ui` needs Python Playwright (`pip install playwright && playwright install chromium`) and an internet connection for Three.js. It checks the title screen, the encyclopedia (locking, discovering, entries), the arthropod branch, a full game and the phone layout.
