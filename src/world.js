@@ -112,6 +112,7 @@ export class World {
     this.onEat = null;
     this.hunt = null; // { e, until, speed }: a predator chasing the player
     this.nextHunt = 0;
+    this.huntsPaused = false; // the player is choosing a mutation: no predator gives chase
     this.onHuntStart = null;
     this.onBite = null;
     this.onHuntEnd = null;
@@ -472,7 +473,7 @@ export class World {
   // ── Predators that hunt the player ───────────────────────────────────
 
   updateHunt(lead, dt, t) {
-    if (!this.active) {
+    if (!this.active || this.huntsPaused) {
       if (this.hunt) this.endHunt(t, 'cancelled');
       this.nextHunt = 0;
       return;

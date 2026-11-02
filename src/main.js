@@ -71,7 +71,11 @@ world.onLand = (dt, inWater) => {
   const before = game.moisture;
   const r = G.skinMoisture(game, dt, inWater);
   UI.setMoisture(game);
-  if (before >= 30 && game.moisture < 30) {
+  if (before >= 50 && game.moisture < 50) {
+    skinWarned = true;
+    UI.toast('💧 Warning! Humidity level less than 50%!', 4000);
+    sound.danger();
+  } else if (before >= 30 && game.moisture < 30) {
     skinWarned = true;
     UI.toast('<div class="toast-kicker">💧 Your skin is drying out</div>Get back into the water before it is too late.', 4000);
     sound.danger();
@@ -221,8 +225,10 @@ function liveGeneration() {
 
 function mutationPhase() {
   const options = G.minorOptions(game);
+  world.huntsPaused = true;
   UI.setActions(`<div class="actions-title">🧬 A mutation appears. Choose one:</div>${UI.cardsHTML(options, game, 'small')}`, {
     onPick: (id) => {
+      world.huntsPaused = false;
       const c = G.applyChoice(game, id, 'minor');
       UI.log(`${c.icon} Mutation: <b>${c.name}</b>.`);
       world.setCreature(game, { evolve: true });
