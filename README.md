@@ -52,3 +52,7 @@ npm run test:ui   # plays the real game in headless Chromium (~2 minutes)
 `npm test` runs the files in `test/*.test.js` with Node's built-in test runner. They check that every lineage gets a fork in every era, that all content references are valid, the rules for mutations, diets and extinction events, and 500 random full games.
 
 `npm run test:ui` needs Python Playwright (`pip install playwright && playwright install chromium`) and an internet connection for Three.js. It checks the title screen, the encyclopedia (locking, discovering, entries), the arthropod branch, a full game and the phone layout.
+
+## Workflow
+
+This project does not use pull requests or manual merges: commit directly to `main`.
