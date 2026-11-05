@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as G from '../src/game.js';
-import { runRecord, records } from '../src/gallery.js';
+import { runRecord, records, runLook } from '../src/gallery.js';
 
 function finishedGame(ids, name) {
   const g = G.createGame({ name });
@@ -25,6 +25,15 @@ test('a run record keeps what the gallery and its timeline need', () => {
   assert.equal(run.history.length, g.history.length);
   assert.deepEqual(run.look, { tags: [...g.tags], line: 'omnivore', size: g.traits.size, era: g.era });
   assert.ok(JSON.parse(JSON.stringify(run)), 'it must survive being stored as JSON');
+});
+
+test('runs saved before portraits existed get their look back from their choices', () => {
+  const g = finishedGame(['herbivore', 'speed', 'spine', 'goLand', 'warmBlooded', 'fur', 'intelligence'], 'Oldus');
+  G.applyChoice(g, 'giant', 'minor');
+  const run = runRecord(g);
+  const old = JSON.parse(JSON.stringify({ ...run, look: undefined }));
+  assert.equal(old.look, undefined);
+  assert.deepEqual(runLook(old), run.look);
 });
 
 test('records pick the best runs, and handle having none', () => {

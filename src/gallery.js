@@ -1,7 +1,8 @@
 // Past lineages: every finished game, remembered in this browser, with records to beat.
 
 import { showModal, timelineHTML, fmtPop, esc } from './ui.js';
-import { lifespanMyr, extinctionsSurvived, descendants } from './game.js';
+import { lifespanMyr, extinctionsSurvived, descendants, createGame, applyChoice } from './game.js';
+import { CHOICES } from './data.js';
 
 const STORE = 'lineage.runs';
 const MAX_RUNS = 50;
@@ -36,6 +37,19 @@ export function runRecord(g, date = Date.now()) {
     // What it looked like at the end, for its portrait: the fields the creature builder reads.
     look: { tags: [...g.tags], line: g.diet?.line ?? null, size: g.traits.size, era: g.era },
   };
+}
+
+const CHOICE_BY_NAME = Object.fromEntries(Object.entries(CHOICES).map(([id, c]) => [c.name, id]));
+
+/** What a run's species looked like. Runs saved before 1.9.2 have no `look`: replay their choices to rebuild it. */
+export function runLook(run) {
+  if (run.look) return run.look;
+  const g = createGame({ name: run.name });
+  for (const h of run.history) {
+    const id = h.kind !== 'event' && CHOICE_BY_NAME[h.name];
+    if (id) applyChoice(g, id, h.kind);
+  }
+  return { tags: [...g.tags], line: g.diet?.line ?? null, size: g.traits.size, era: run.era };
 }
 
 /** Best runs so far. Each record is a run, or null when there are none. */
@@ -103,7 +117,7 @@ function runHTML(run) {
         <button class="codex-back" id="gallery-list">← All lineages</button>
         <h2>${run.won ? '🏆' : '🦴'} <i>${esc(run.name)}</i></h2>
       </div>
-      ${run.look ? `<img class="codex-hero run-portrait" alt="${esc(run.name)}">` : ''}
+      <img class="codex-hero run-portrait" alt="${esc(run.name)}">
       <div class="stats">
         <div><b>${run.lifespan.toLocaleString()}</b><span>million years</span></div>
         <div><b>${fmtPop(run.peak)}</b><span>peak population</span></div>
@@ -125,7 +139,7 @@ export function openGallery(onClose) {
     showModal(runHTML(run), { wide: true, buttons: { '#gallery-list': showList } });
     const img = document.querySelector('#modal-content .run-portrait');
     // Loaded on demand: the 3D code only runs in the browser, and the rest of this module also runs in Node.
-    if (img) import('./world.js').then(({ creaturePortrait }) => { img.src = creaturePortrait(run.look); });
+    import('./world.js').then(({ creaturePortrait }) => { img.src = creaturePortrait(runLook(run)); });
   };
   showList();
 }
