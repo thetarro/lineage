@@ -3,7 +3,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as G from '../src/game.js';
-import { CHOICES, ERAS, EVENTS, GENERATIONS_PER_ERA, FORAGE_CAP, MIN_VIABLE_POPULATION, DRY_SECONDS, SOAK_SECONDS, DRY_TICK } from '../src/data.js';
+import {
+  CHOICES, ERAS, EVENTS, GENERATIONS_PER_ERA, FORAGE_CAP, MIN_VIABLE_POPULATION, DRY_SECONDS, SOAK_SECONDS, DRY_TICK, ENERGY_SECONDS, ENERGY_BITE,
+} from '../src/data.js';
 
 /** A game after taking these choices, advancing one era per choice like the fork phase. */
 function lineage(ids) {
@@ -322,6 +324,84 @@ test('amphibians dry out on land and must go back to the water', () => {
   assert.equal(reptile.moisture, 100, 'a shelled egg frees reptiles from the water');
 });
 
+test('warm-blooded species burn energy on land and refill it with food; it costs population, never the game', () => {
+  const g = lineage(['omnivore', 'shell', 'spine', 'goLand', 'warmBlooded']);
+  assert.ok(G.burnsEnergy(g));
+  assert.equal(g.energy, 100);
+  G.bodyHeat(g, ENERGY_SECONDS / 2);
+  assert.equal(g.energy, 50);
+  G.forage(g);
+  assert.equal(g.energy, 50 + ENERGY_BITE, 'each food item refuels');
+  g.population = MIN_VIABLE_POPULATION + 100;
+  for (let i = 0; i < 100; i++) G.bodyHeat(g, DRY_TICK);
+  assert.equal(g.population, MIN_VIABLE_POPULATION, 'out of energy, the population falls to the viable minimum');
+  assert.equal(g.status, 'alive');
+
+  const cold = lineage(['omnivore', 'shell', 'spine', 'goLand', 'coldBlooded']);
+  G.bodyHeat(cold, ENERGY_SECONDS * 2);
+  assert.equal(cold.energy, 100, 'cold-blooded species do not burn energy');
+});
+
+// ── Extinction outlook on the cards ───────────────────────────────────────
+
+test('cards can tell what helps or hurts against the coming extinction', () => {
+  const g = withChoices(['omnivore'], 2); // the Ordovician Freeze is coming
+  assert.ok(G.eventOutlook(g, 'coldTolerance') > 0.2);
+  assert.ok(G.eventOutlook(g, 'filterFeeder') < 0);
+  assert.ok(Math.abs(G.eventOutlook(g, 'fastBreeding')) < 0.05);
+  assert.ok(!g.tags.has('coldTolerance'), 'previewing a choice does not take it');
+  G.resolveEvent(g);
+  assert.equal(G.eventOutlook(g, 'coldTolerance'), 0, 'nothing more to say once the extinction is past');
+});
+
+// ── The rival lineage ─────────────────────────────────────────────────────
+
+test('a rival lineage evolves in step with the player', () => {
+  const g = G.createGame({ rng: mulberry32(7) });
+  assert.ok(g.rival && !g.rival.rival, 'the rival has no rival of its own');
+  G.applyChoice(g, 'omnivore', 'fork');
+  assert.ok(G.rivalFork(g, 'omnivore'));
+  assert.ok(g.rival.diet, 'the rival takes a diet too');
+  G.simulateGeneration(g);
+  assert.equal(g.rival.generation, 1);
+  assert.equal(g.rival.history.filter((h) => h.kind === 'minor').length, 1, 'and a mutation every generation');
+  G.advanceEra(g);
+  assert.equal(g.rival.era, g.era);
+});
+
+test('the rival takes food only where diets overlap, in the same habitat, while it lives', () => {
+  const g = withChoices(['herbivore']);
+  G.applyChoice(g.rival, 'herbivore', 'fork');
+  const taken = G.competition(g, g.rival);
+  assert.ok(taken > 0);
+
+  const alone = withChoices(['herbivore']);
+  alone.rival = null;
+  const r = G.simulateGeneration(g);
+  assert.equal(r.competition, taken);
+  assert.ok(Math.abs(r.income - G.simulateGeneration(alone).income * (1 - taken)) < 1e-9, 'it cuts food income');
+
+  const apart = withChoices(['herbivore']);
+  G.applyChoice(apart.rival, 'carnivore', 'fork');
+  assert.equal(G.competition(apart, apart.rival), 0, 'no shared food, no competition');
+  const ashore = withChoices(['herbivore']);
+  G.applyChoice(ashore.rival, 'herbivore', 'fork');
+  G.applyChoice(ashore.rival, 'goLand', 'fork');
+  assert.equal(G.competition(ashore, ashore.rival), 0, 'no competition across habitats');
+  g.rival.status = 'extinct';
+  assert.equal(G.competition(g, g.rival), 0, 'an extinct rival takes nothing');
+});
+
+test('the rival faces the same extinctions', () => {
+  const g = withChoices(['omnivore'], 2);
+  G.applyChoice(g.rival, 'omnivore', 'fork');
+  g.rival.era = 2;
+  const r = G.resolveEvent(g);
+  assert.equal(r.rival.name, g.rival.name);
+  assert.equal(r.rival.survived, g.rival.status === 'alive');
+  assert.equal(g.rival.history.at(-1).kind, 'event');
+});
+
 // ── Whole games ────────────────────────────────────────────────────────────
 
 /** Play a full game with random choices; returns the finished game. */
@@ -329,7 +409,9 @@ function playRandom(rng) {
   const g = G.createGame({ rng });
   const pick = (ids) => ids[Math.floor(rng() * ids.length)];
   for (;;) {
-    G.applyChoice(g, pick(G.forkFor(g).options), 'fork');
+    const id = pick(G.forkFor(g).options);
+    G.applyChoice(g, id, 'fork');
+    G.rivalFork(g, id);
     while (g.generation < GENERATIONS_PER_ERA) {
       G.simulateGeneration(g);
       if (g.status === 'extinct') return g;

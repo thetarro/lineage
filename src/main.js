@@ -31,7 +31,8 @@ world.onEncounter = (sp) => {
 // Food the player reaches tops up the Food meter, up to a limit per generation.
 let fullNotice = null; // the generation we last said "well fed" in
 world.onEat = () => {
-  const gain = G.forage(game);
+  const gain = G.forage(game); // also refuels warm-blooded species
+  UI.setMeter('energy', game.energy);
   if (gain) {
     UI.renderHUD(game);
     sound.eat();
@@ -43,7 +44,10 @@ world.onEat = () => {
 
 // Predators of the era now and then hunt the player: outrun them, or trust your armor.
 world.onHuntStart = (sp) => {
-  UI.toast(`<div class="toast-kicker">⚠ A predator is hunting you</div><b>${sp.name}</b>. ${world.aquatic ? 'Swim' : 'Run'} away!`, 4000);
+  const tip = world.perks.burrow ? 'Keep still to dig in!'
+    : game.tags.has('flight') && !world.aquatic ? 'Fly up, out of its reach!'
+      : `${world.aquatic ? 'Swim' : 'Run'} away!`;
+  UI.toast(`<div class="toast-kicker">⚠ A predator is hunting you</div><b>${sp.name}</b>. ${tip}`, 4000);
   sound.danger();
 };
 world.onBite = (sp) => {
@@ -59,18 +63,34 @@ world.onBite = (sp) => {
     sound.bite();
   }
 };
-world.onHuntEnd = (sp) => {
-  UI.toast(`💨 You escaped from <b>${sp.name}</b>.`, 3000);
-  UI.log(`💨 Escaped from <b>${sp.name}</b>.`);
+world.onHuntEnd = (sp, how) => {
+  const msg = {
+    hid: `🕳️ You dug in, and <b>${sp.name}</b> lost your trail.`,
+    flew: `🪽 <b>${sp.name}</b> cannot reach you in the air, and gives up.`,
+  }[how] ?? `💨 You escaped from <b>${sp.name}</b>.`;
+  UI.toast(msg, 3000);
+  UI.log(msg);
+};
+
+// Cold-blooded species slow down in the chill of night on land.
+world.onNightfall = () => {
+  if (world.perks.cold) UI.toast('🌙 Night falls. Your cold blood slows you down until the sun rises.', 3500);
+};
+world.onSunrise = () => {
+  if (world.perks.cold) UI.toast('☀️ The sun is up: you warm up and speed up again.', 3000);
 };
 
 // Amphibians must keep going back to the water: their skin dries out on land.
 let skinWarned = false;
 world.onLand = (dt, inWater) => {
-  if (!G.needsWater(game)) return;
+  if (G.needsWater(game)) keepSkinWet(dt, inWater);
+  if (G.burnsEnergy(game)) burnEnergy(dt);
+};
+
+function keepSkinWet(dt, inWater) {
   const before = game.moisture;
   const r = G.skinMoisture(game, dt, inWater);
-  UI.setMoisture(game);
+  UI.setMeter('moisture', game.moisture);
   if (before >= 50 && game.moisture < 50) {
     skinWarned = true;
     UI.toast('💧 Warning! Humidity level less than 50%!', 4000);
@@ -90,7 +110,25 @@ world.onLand = (dt, inWater) => {
     UI.log(`☀️ Dried out on land: <span class="bad">-${UI.fmtPop(r.lost)}</span>.`);
     sound.bite();
   }
-};
+}
+
+// Warm-blooded species burn energy as they roam, and must keep reaching food.
+function burnEnergy(dt) {
+  const before = game.energy;
+  const r = G.bodyHeat(game, dt);
+  UI.setMeter('energy', game.energy);
+  if (before >= 30 && game.energy < 30) {
+    UI.toast('<div class="toast-kicker">🔥 Running low on energy</div>Warm blood burns fast. Find food!', 4000);
+    sound.danger();
+  } else if (before > 0 && game.energy === 0) {
+    UI.toast('<div class="toast-kicker">🥶 Out of energy</div>Your kind are weakening. Eat something, now!', 4000);
+  }
+  if (r.lost) {
+    UI.renderHUD(game);
+    UI.log(`🥶 Out of energy: <span class="bad">-${UI.fmtPop(r.lost)}</span>.`);
+    sound.bite();
+  }
+}
 
 // Browsers only allow audio after a user gesture.
 const unlockAudio = () => { sound.start(); sound.setTheme(world.themeKey); };
@@ -111,6 +149,14 @@ function setHabitat() {
   UI.setLife(world.contemporaries, world.met);
   sound.setTheme(world.themeKey);
   joystick.setVertical(world.aquatic || game.tags.has('flight'));
+  showRival();
+}
+
+/** The rival roams the world when it shares the player's habitat. */
+function showRival() {
+  const rival = game.rival;
+  const here = rival?.status === 'alive' && G.habitat(rival) === G.habitat(game);
+  world.setRival(rival, { here, eats: G.competition(game, rival) > 0 });
 }
 
 function titleScreen() {
@@ -181,6 +227,7 @@ function startEra() {
       <h1>${era.name}</h1>
       <div class="mya">${UI.fmtMya(era.mya)}</div>
       <p>${era.blurb}</p>
+      ${game.era === 0 && game.rival ? `<p class="rival-intro">⚔️ Another lineage, <i>${UI.esc(game.rival.name)}</i>, evolves alongside yours. Where your diets overlap, it eats your food: get there first!</p>` : ''}
       <h3 class="fork-title">◆ ${fork.title}</h3>
     </div>
     ${UI.cardsHTML(fork.options, game)}`, {
@@ -189,11 +236,20 @@ function startEra() {
       const c = G.applyChoice(game, id, 'fork');
       UI.log(`<b>${UI.fmtMya(game.mya)}</b>: ${c.icon} Major evolution: <b>${c.name}</b>.`);
       if (!c.diet && game.diet?.name !== prevDiet) UI.log(`🍽️ <b>${prevDiet}</b> is no use on land. Your diet falls back to <b>${game.diet.name}</b>.`);
+      const rc = G.rivalFork(game, id);
+      if (rc) UI.log(`⚔️ Your rival <i>${UI.esc(game.rival.name)}</i> evolves: ${rc.icon} <b>${rc.name}</b>${rc === c ? ', like you' : ''}.`);
       setHabitat(); // habitat forks (land, deep sea, reef) change the scenery
       world.setCreature(game, { evolve: true });
       sound.evolve();
       UI.renderHUD(game);
       UI.banner(`${c.icon} ${c.name}`);
+      if (id === 'warmBlooded') {
+        UI.toast('<div class="toast-kicker">🔥 Warm blood burns energy</div>Your Energy meter drains as you roam. Reach food to refill it.', 7000);
+        UI.log('🔥 Warm blood burns energy: keep reaching food before the <b>Energy</b> meter runs out.');
+      }
+      if (id === 'coldBlooded') {
+        UI.toast('<div class="toast-kicker">🌙 Cold blood</div>You need little food, but the chill of night slows you down until sunrise.', 7000);
+      }
       if (id === 'amphibian') {
         UI.toast('<div class="toast-kicker">🐸 Keep your skin wet</div>Your skin dries out on land. Go back into a lake before the Skin meter runs dry.', 7000);
         UI.log('🐸 Your skin dries out on land: go back into a lake before the <b>Skin</b> meter runs dry.');
@@ -218,9 +274,16 @@ function liveGeneration() {
   const food = r.after.food - r.before.food;
   UI.log(`Generation ${game.generation}: population ${UI.fmtPop(r.before.population)} → <b>${UI.fmtPop(r.after.population)}</b>
     <span class="${d >= 0 ? 'good' : 'bad'}">(${d >= 0 ? '+' : '-'}${UI.fmtPop(Math.abs(d))})</span>,
-    food ${food >= 0 ? '+' : ''}${Math.round(food)}.${r.eaten ? ` Predators took ${UI.fmtPop(r.eaten)}.` : ''}`);
+    food ${food >= 0 ? '+' : ''}${Math.round(food)}.${r.eaten ? ` Predators took ${UI.fmtPop(r.eaten)}.` : ''}${r.competition >= 0.01 ? ` Your rival took ${Math.round(r.competition * 100)}% of your food.` : ''}`);
+  if (r.rivalExtinct) rivalGone(game.rival.causeOfDeath);
   if (game.status === 'extinct') return ending();
   mutationPhase();
+}
+
+function rivalGone(cause) {
+  UI.toast(`<div class="toast-kicker">⚔️ Your rival is gone</div><i>${UI.esc(game.rival.name)}</i> has gone extinct (${cause}). Its food is yours now.`, 5000);
+  UI.log(`⚔️ Your rival <i>${UI.esc(game.rival.name)}</i> has gone extinct: ${cause}.`);
+  showRival();
 }
 
 function mutationPhase() {
@@ -258,6 +321,7 @@ function eventPhase() {
         const r = G.resolveEvent(game);
         UI.renderHUD(game);
         UI.log(`${ev.icon} <b>${ev.name}</b>: ${Math.round(r.survival * 100)}% survived.`);
+        if (r.rival && !r.rival.survived) UI.log(`⚔️ Your rival <i>${UI.esc(r.rival.name)}</i> did not survive it.`);
         if (r.survived) sound.survived();
         else sound.wipedOut();
         UI.showModal(UI.eventResultHTML(r), {
@@ -302,6 +366,7 @@ function ending() {
           <p>${today.fact}</p>
         </div>
       </div>
+      ${rivalFate()}
       ${broken.length ? `<p class="new-record">🏅 New record: ${broken.join(', ')}!</p>` : ''}
       <div class="stats">
         <div><b>${Math.round(G.lifespanMyr(game)).toLocaleString()}</b><span>million years</span></div>
@@ -312,6 +377,15 @@ function ending() {
       ${UI.timelineHTML(game)}
       <button class="primary" id="again">Evolve again</button>
     </div>`, { wide: true, buttons: { '#again': titleScreen } });
+}
+
+/** How the rival fared, for the ending screen. */
+function rivalFate() {
+  const r = game.rival;
+  if (!r) return '';
+  const fate = r.status === 'extinct' ? `went extinct: ${r.causeOfDeath}, ${UI.fmtMya(r.mya)}`
+    : r.status === 'survived' ? 'also reached the present day' : 'outlived you';
+  return `<p class="rival-fate">⚔️ Your rival <i>${UI.esc(r.name)}</i> ${fate}.</p>`;
 }
 
 titleScreen();

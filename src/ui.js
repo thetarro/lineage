@@ -1,7 +1,7 @@
 // DOM overlay: HUD panels, choice cards, modals and the event log.
 
 import { CHOICES, ERAS, TRAIT_NAMES, GENERATIONS_PER_ERA } from './data.js';
-import { carryingCapacity, upcomingEvent, habitat, needsWater } from './game.js';
+import { carryingCapacity, upcomingEvent, habitat, needsWater, burnsEnergy, competition, eventOutlook } from './game.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -53,6 +53,7 @@ export function renderHUD(g) {
     ${bar('💧 Water', g.meters.water, 100, 'water')}
     ${bar('🫁 Oxygen', g.meters.oxygen, 100, 'oxygen')}
     ${needsWater(g) ? `<div id="moisture" title="Your skin dries out on land. Go back into a lake to wet it.">${bar('🐸 Skin', g.moisture, 100, 'moisture')}</div>` : ''}
+    ${burnsEnergy(g) ? `<div id="energy" title="Warm blood burns energy. Reach food to refill it.">${bar('🔥 Energy', g.energy, 100, 'energy')}</div>` : ''}
     <div id="life">${lifeHTML()}</div>`;
 
   const diet = g.diet
@@ -63,11 +64,12 @@ export function renderHUD(g) {
     .join('');
   const chips = g.history.filter((h) => h.kind !== 'event').map((h) => `<span class="chip" title="${h.name}">${h.icon} ${h.name}</span>`).join('');
   $('species-panel').innerHTML = `
-    <h3 class="species-name">${g.name}</h3>
+    <h3 class="species-name">${esc(g.name)}</h3>
     <div class="habitat">${habitat(g) === 'aquatic' ? '🌊 Aquatic' : '🌍 Terrestrial'}</div>
     <div class="diet">${diet}</div>
     <div class="traits">${traits}</div>
-    <div class="chips">${chips}</div>`;
+    <div class="chips">${chips}</div>
+    ${rivalHTML(g)}`;
 
   const ev = upcomingEvent(g);
   const warn = $('warning');
@@ -76,13 +78,27 @@ export function renderHUD(g) {
   if (ev) warn.innerHTML = `<b>⚠ Signs of change:</b> ${ev.warning}`;
 }
 
-/** Live update of the amphibian Skin meter, without rebuilding the HUD every frame. */
-export function setMoisture(g) {
-  const el = $('moisture')?.firstElementChild;
+/** The rival lineage: who it is, and how much of your food it takes. */
+function rivalHTML(g) {
+  const r = g.rival;
+  if (!r) return '';
+  const taken = Math.round(competition(g, r) * 100);
+  const status = r.status !== 'alive' ? '<span class="good">Extinct</span>'
+    : habitat(r) !== habitat(g) ? `Lives ${habitat(r) === 'aquatic' ? 'in the sea' : 'on land'}, out of your way`
+      : taken ? `<span class="bad">Takes ${taken}% of your food</span>` : 'Eats different food';
+  const icons = r.history.filter((h) => h.kind === 'fork').map((h) => h.icon).join(' ');
+  return `<div class="rival" title="Another lineage evolving alongside yours. Where your diets overlap, it eats your food.">
+    <div class="rival-name">⚔️ Rival: <i>${esc(r.name)}</i></div>
+    <div class="rival-status">${icons ? `${icons} · ` : ''}${status}</div></div>`;
+}
+
+/** Live update of a real-time meter (amphibians' Skin, warm-blooded Energy), without rebuilding the HUD every frame. */
+export function setMeter(id, value) {
+  const el = $(id)?.firstElementChild;
   if (!el) return;
-  el.querySelector('.meter-fill').style.width = `${g.moisture}%`;
-  el.querySelector('.meter-value').textContent = Math.round(g.moisture);
-  el.classList.toggle('low', g.moisture < 25);
+  el.querySelector('.meter-fill').style.width = `${value}%`;
+  el.querySelector('.meter-value').textContent = Math.round(value);
+  el.classList.toggle('low', value < 25);
 }
 
 export function hideWarning() { $('warning').hidden = true; }
@@ -110,6 +126,12 @@ function effectChips(id, g) {
     if (g.diet?.line === 'omnivore' && c.diet.line !== 'omnivore') out.push('<span class="fx lean">Omnivore lean</span>');
   }
   if (c.removeTags?.includes('aquatic')) out.push('<span class="fx diet">Leaves the water</span>');
+  // Flag what clearly helps or hurts against the extinction foreshadowed this era, without numbers.
+  const outlook = eventOutlook(g, id);
+  if (Math.abs(outlook) >= 0.05) {
+    const ev = upcomingEvent(g);
+    out.push(`<span class="fx ${outlook > 0 ? 'good' : 'bad'} omen">${ev.icon} ${outlook > 0 ? 'Helps' : 'Hurts'} vs ${ev.name}</span>`);
+  }
   return out.join('');
 }
 
@@ -210,6 +232,7 @@ export function eventResultHTML(r) {
       <tr class="total"><td>Survival</td><td>${Math.round(r.survival * 100)}%</td></tr>
     </table>
     <p class="pop-change">Population ${fmtPop(r.before)} → <b>${fmtPop(r.after)}</b></p>
+    ${r.rival ? `<p class="rival-fate">⚔️ Your rival <i>${esc(r.rival.name)}</i> ${r.rival.survived ? 'made it through too.' : 'did not survive.'}</p>` : ''}
     <p class="verdict ${r.survived ? 'good' : 'bad'}">${r.survived ? 'Your species endures.' : 'Too few remain. Your species is gone.'}</p>
     <button class="primary" id="continue">Continue</button>`;
 }

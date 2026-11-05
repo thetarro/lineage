@@ -3,7 +3,7 @@
 import {
   START, CHOICES, ERAS, EVENTS, DESCENDANTS, MIN_VIABLE_POPULATION, GENERATIONS_PER_ERA,
   TIER_EFFICIENCY, OMNIVORE_EFFICIENCY, PRESENT_DAY_MYA, PREDATION, PREDATION_SAFE, FORAGE_BITE, FORAGE_CAP, BITE_SHARE,
-  DRY_SECONDS, SOAK_SECONDS, DRY_TICK, DRY_SHARE,
+  DRY_SECONDS, SOAK_SECONDS, DRY_TICK, DRY_SHARE, ENERGY_SECONDS, ENERGY_BITE, ENERGY_SHARE, COMPETITION, RIVAL_FOLLOWS,
 } from './data.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -17,7 +17,8 @@ export function randomSpeciesName(rng = Math.random) {
   return `${pick(GENUS, rng)}${pick(GENUS_END, rng)} ${pick(EPITHET, rng)}`;
 }
 
-export function createGame({ name, rng = Math.random } = {}) {
+/** A new game. It comes with a rival lineage: a second game played by chance (`rival: false` skips it). */
+export function createGame({ name, rng = Math.random, rival = true } = {}) {
   return {
     name: name || randomSpeciesName(rng),
     rng,
@@ -33,6 +34,9 @@ export function createGame({ name, rng = Math.random } = {}) {
     foraged: 0, // food collected by hand this generation
     moisture: 100, // amphibians' skin, drying out on land in real time
     dryFor: 0, // seconds spent dried out since the last loss
+    energy: 100, // warm-blooded species' energy, burned in real time on land
+    hungryFor: 0, // seconds spent out of energy since the last loss
+    rival: rival ? createGame({ rng, rival: false }) : null,
     world: { shock: {}, oxygen: 1, wetness: 1 },
     history: [],
     status: 'alive', // alive | extinct | survived
@@ -46,6 +50,8 @@ export const habitat = (g) => (g.tags.has('terrestrial') ? 'terrestrial' : 'aqua
 export const dietLine = (g) => g.diet?.line ?? null;
 /** Amphibians must keep returning to the water (a shelled egg frees reptiles from it). */
 export const needsWater = (g) => g.tags.has('amphibian');
+/** Warm-blooded species burn energy in real time and must keep eating. */
+export const burnsEnergy = (g) => g.tags.has('warmBlooded');
 export const currentEra = (g) => ERAS[g.era];
 export const upcomingEvent = (g) => (ERAS[g.era]?.event ? EVENTS[ERAS[g.era].event] : null);
 
@@ -151,6 +157,24 @@ export function dietAvailability(g) {
   return Object.entries(sources).reduce((sum, [k, w]) => sum + (ab[k] ?? 0) * w, 0) / total;
 }
 
+/** How much two diets draw on the same food, 0..1. */
+export function dietOverlap(a, b) {
+  if (!a || !b) return 0;
+  const shares = (d) => {
+    const total = Object.values(d.sources).reduce((x, y) => x + y, 0);
+    return (k) => (d.sources[k] ?? 0) / total;
+  };
+  const sa = shares(a), sb = shares(b);
+  return Object.keys(a.sources).reduce((sum, k) => sum + Math.min(sa(k), sb(k)), 0);
+}
+
+/** Share of `g`'s food income that `other` takes: only in the same habitat, mostly by diet overlap, then by numbers. */
+export function competition(g, other) {
+  if (!other || other.status !== 'alive' || habitat(g) !== habitat(other)) return 0;
+  const numbers = clamp(other.population / carryingCapacity(other), 0, 1);
+  return COMPETITION * dietOverlap(g.diet, other.diet) * (0.5 + 0.5 * numbers);
+}
+
 // ── Actions ────────────────────────────────────────────────────────────────
 
 export function applyChoice(g, id, kind) {
@@ -161,6 +185,7 @@ export function applyChoice(g, id, kind) {
   g.tags.add(id);
   if (c.removeTags?.includes('aquatic')) leaveWater(g);
   if (id === 'amphibian') g.moisture = 100;
+  if (id === 'warmBlooded') g.energy = 100;
   if (c.diet) adoptDiet(g, c);
   g.history.push({ era: g.era, mya: g.mya, kind, id, name: c.name, icon: c.icon });
   return c;
@@ -198,14 +223,30 @@ function leaveWater(g) {
   g.diet.sources = Object.fromEntries(Object.entries(g.diet.sources).filter(([k]) => k !== 'plankton'));
 }
 
-/** Live one generation: food/water/oxygen meters update, population grows or shrinks. */
+/**
+ * Live one generation: food/water/oxygen meters update, population grows or shrinks.
+ * The rival lives its generation too, and picks a mutation of its own.
+ */
 export function simulateGeneration(g) {
+  const r = liveGeneration(g, g.rival);
+  const rival = g.rival;
+  if (rival?.status === 'alive') {
+    liveGeneration(rival, g);
+    const options = minorOptions(rival);
+    if (rival.status !== 'alive') r.rivalExtinct = true;
+    else if (options.length) applyChoice(rival, pick(options, g.rng), 'minor');
+  }
+  return r;
+}
+
+function liveGeneration(g, rival) {
   const t = g.traits;
   const before = { ...g.meters, population: g.population };
   const availability = dietAvailability(g);
 
   const hunting = dietLine(g) === 'carnivore' ? t.speed * 1.5 : 0;
-  const income = dietEfficiency(g) * availability * (24 + t.size * 4) + hunting + t.adaptability * 0.8;
+  const competed = competition(g, rival);
+  const income = (dietEfficiency(g) * availability * (24 + t.size * 4) + hunting + t.adaptability * 0.8) * (1 - competed);
   const drain = 4 + t.metabolism * 2.5 + t.size * 2.5;
   g.meters.food = clamp(g.meters.food + income - drain, 0, 100);
 
@@ -248,12 +289,13 @@ export function simulateGeneration(g) {
     g.status = 'extinct';
     g.causeOfDeath = starvationCause(g);
   }
-  return { before, after: { ...g.meters, population: g.population }, income, drain, availability, health, eaten };
+  return { before, after: { ...g.meters, population: g.population }, income, drain, availability, health, eaten, competition: competed };
 }
 
 /** The player reached a food item. Returns the food gained (0 once full for this generation). */
 export function forage(g) {
   if (g.status !== 'alive') return 0;
+  if (burnsEnergy(g)) g.energy = Math.min(100, g.energy + ENERGY_BITE); // every bite warms, even when well fed
   const gain = Math.min(FORAGE_BITE, FORAGE_CAP - g.foraged, 100 - g.meters.food);
   if (gain <= 0) return 0;
   g.meters.food += gain;
@@ -291,6 +333,35 @@ export function skinMoisture(g, dt, inWater) {
   return { lost };
 }
 
+/**
+ * Real time passing for a warm-blooded species on land: its energy burns away. Run out, and it
+ * costs population now and then (refilled by reaching food), but never ends the game.
+ */
+export function bodyHeat(g, dt) {
+  if (!burnsEnergy(g) || g.status !== 'alive') return { lost: 0 };
+  g.energy = Math.max(0, g.energy - (100 * dt) / ENERGY_SECONDS);
+  if (g.energy > 0) {
+    g.hungryFor = 0;
+    return { lost: 0 };
+  }
+  g.hungryFor += dt;
+  if (g.hungryFor < DRY_TICK) return { lost: 0 };
+  g.hungryFor -= DRY_TICK;
+  const lost = Math.max(0, Math.min(Math.round(g.population * ENERGY_SHARE), g.population - MIN_VIABLE_POPULATION));
+  g.population -= lost;
+  return { lost };
+}
+
+/** The rival takes its fork for the era: the player's own choice, often, when it is on offer. */
+export function rivalFork(g, playerChoice) {
+  const rival = g.rival;
+  if (rival?.status !== 'alive') return null;
+  const options = forkFor(rival)?.options ?? [];
+  if (!options.length) return null;
+  const id = options.includes(playerChoice) && g.rng() < RIVAL_FOLLOWS ? playerChoice : pick(options, g.rng);
+  return applyChoice(rival, id, 'fork');
+}
+
 function starvationCause(g) {
   const m = g.meters;
   const worst = Object.entries(m).sort((a, b) => a[1] - b[1])[0][0];
@@ -312,6 +383,22 @@ export function eventBreakdown(g, ev) {
   }
   lines.push({ label: 'Adaptability', value: g.traits.adaptability * 0.015 });
   return lines;
+}
+
+/**
+ * How a choice would change the odds against this era's coming extinction (before feeding),
+ * or 0 when none is coming. Previews the choice on a copy of the game.
+ */
+export function eventOutlook(g, id) {
+  const ev = upcomingEvent(g);
+  if (!ev || g.history.some((h) => h.kind === 'event' && h.era === g.era)) return 0;
+  const odds = (x) => eventBreakdown(x, ev).reduce((sum, l) => sum + l.value, 0);
+  const preview = {
+    ...g, traits: { ...g.traits }, tags: new Set(g.tags), history: [],
+    diet: g.diet && { ...g.diet, sources: { ...g.diet.sources } },
+  };
+  applyChoice(preview, id, 'preview');
+  return odds(preview) - odds(g);
 }
 
 /** Resolve the era's extinction event. */
@@ -337,14 +424,18 @@ export function resolveEvent(g) {
     g.status = 'extinct';
     g.causeOfDeath = ev.name;
   }
-  return { event: ev, breakdown, fed, survival, before, after: g.population, survived };
+  const rival = g.rival?.status === 'alive' && upcomingEvent(g.rival) ? { name: g.rival.name, survived: resolveEvent(g.rival).survived } : null;
+  return { event: ev, breakdown, fed, survival, before, after: g.population, survived, rival };
 }
 
 export function advanceEra(g) {
+  if (g.rival?.status === 'alive') advanceEra(g.rival);
   g.era += 1;
   g.generation = 0;
   g.moisture = 100; // each era starts fresh from the water
   g.dryFor = 0;
+  g.energy = 100;
+  g.hungryFor = 0;
   if (g.era >= ERAS.length) {
     g.status = 'survived';
     g.mya = PRESENT_DAY_MYA;

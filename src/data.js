@@ -41,6 +41,20 @@ export const DRY_SECONDS = 45;
 export const SOAK_SECONDS = 4;
 export const DRY_TICK = 3;
 export const DRY_SHARE = 0.04;
+
+// Warm-blooded species burn energy in real time on land: the Energy meter empties in
+// ENERGY_SECONDS and each food item reached refills ENERGY_BITE of it. Run out, and they lose
+// ENERGY_SHARE of the population every DRY_TICK seconds, never below the viable minimum.
+export const ENERGY_SECONDS = 50;
+export const ENERGY_BITE = 25;
+export const ENERGY_SHARE = 0.03;
+
+// A rival lineage evolves alongside the player's. Where the two share a habitat, each takes
+// up to COMPETITION of the other's food income: in proportion to how much their diets overlap,
+// and from half of that up to all of it as it nears its carrying capacity. At each fork the rival takes the player's
+// choice with chance RIVAL_FOLLOWS, when it can.
+export const COMPETITION = 0.2;
+export const RIVAL_FOLLOWS = 0.5;
 export const GENERATIONS_PER_ERA = 2;
 
 export const LINE_COLORS = { carnivore: 0xd9534f, omnivore: 0xe0a030, herbivore: 0x5cb85c };

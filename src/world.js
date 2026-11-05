@@ -11,11 +11,19 @@ const WATER_LEVEL = -0.4; // land-mode lakes and shoreline
 const BOUNDS = 26; // how far the player can roam from the center
 // Group-living species bring kin along: [tag, followers]. The largest group wins.
 const GROUPS = [['swarm', 14], ['schooling', 10], ['colony', 10], ['packHunter', 6], ['social', 5]];
+const DAY_SECONDS = 100; // a full day and night on land, in real time
+const NIGHT_SKY = new THREE.Color(0x0b1430);
+const FLASH_SKY = new THREE.Color(0xfff2d0);
+const RIVAL_KIN = 3; // members of the rival lineage roaming the player's world
 
 const groundHeight = (x, z) =>
   Math.sin(x * 0.18) * 0.7 + Math.cos(z * 0.22) * 0.6 + Math.sin((x + z) * 0.08) * 1.0;
 
 const rand = (a, b) => a + Math.random() * (b - a);
+const smoothstep = (lo, hi, v) => {
+  const k = Math.max(0, Math.min(1, (v - lo) / (hi - lo)));
+  return k * k * (3 - 2 * k);
+};
 
 const THEMES = {
   primordial: { bg: 0x1f3b30, near: 6, far: 38, floor: 0x3b3a2a, hemi: 0.9, sun: 0.8, water: true },
@@ -139,6 +147,25 @@ export class World {
     this.huntMarker.rotation.x = Math.PI;
     this.huntMarker.visible = false;
     this.stage.add(this.huntMarker);
+    // An orange one over the rival lineage, which competes for the player's food.
+    this.rivalMarker = new THREE.Mesh(
+      new THREE.ConeGeometry(0.2, 0.4, 4),
+      new THREE.MeshStandardMaterial({ color: 0xff9a2e, emissive: 0xff9a2e, emissiveIntensity: 0.8, flatShading: true }),
+    );
+    this.rivalMarker.rotation.x = Math.PI;
+    this.rivalMarker.visible = false;
+    this.stage.add(this.rivalMarker);
+    this.rivalGroup = new THREE.Group();
+    this.stage.add(this.rivalGroup);
+    this.rivals = []; // the rival lineage's roaming members
+    this.rivalEats = false; // whether they go for the player's food
+    // Abilities the player's traits grant in the world.
+    this.perks = { burrow: false, keen: false, camo: false, cold: false };
+    this.dayTime = 0; // seconds into the current land day
+    this.daylight = 1;
+    this.night = false;
+    this.onNightfall = null;
+    this.onSunrise = null;
     this.animations = [];
     this.clock = new THREE.Clock();
 
@@ -168,6 +195,8 @@ export class World {
     this.hunt = null;
     this.huntMarker.visible = false;
     this.era = g.era;
+    this.dayTime = DAY_SECONDS * 0.05; // every scene starts in the morning
+    this.night = false;
     this.themeKey = themeFor(g);
     const theme = THEMES[this.themeKey];
     this.aquatic = theme.water;
@@ -372,13 +401,19 @@ export class World {
   setCreature(g, { evolve = false } = {}) {
     const prev = this.player;
     this.clear(this.avatar);
+    this.perks = {
+      burrow: g.tags.has('burrower'), // dig in by keeping still, hidden from predators
+      keen: g.tags.has('keenEyes'), // see farther, and meet species from farther away
+      camo: g.tags.has('camouflage'), // predators find you half as often
+      cold: g.tags.has('coldBlooded'), // slow at night on land
+    };
     const built = buildCreature(g);
     this.avatar.add(built.root);
     this.player = {
       ...built,
       pos: prev?.pos.clone() ?? new THREE.Vector3(0, this.aquatic ? 4 : 0, 0),
       dir: prev?.dir.clone() ?? new THREE.Vector3(0, 0, 1),
-      phase: 0, anim: 0, moving: 0.3, grow: evolve ? 0 : 1, flying: g.tags.has('flight'),
+      phase: 0, anim: 0, moving: 0.3, grow: evolve ? 0 : 1, flying: g.tags.has('flight'), still: 0, dig: 0,
       speed: (0.9 + g.traits.speed * 0.25) * (g.era === 0 ? 0.5 : 1),
     };
     this.setFood(g);
@@ -445,11 +480,15 @@ export class World {
       // Flyers swoop down for food on the ground, so only nearness on the map counts for them.
       const near = lead.flying && !this.aquatic ? flat < reach * 1.5 : Math.hypot(flat, d.y - lead.pos.y) < reach;
       if (!near) continue;
-      f.obj.visible = false;
-      f.eatenAt = t;
-      this.burst(d, FOOD_COLORS[f.type]);
+      this.eatFood(f, t);
       this.onEat?.(f.type);
     }
+  }
+
+  eatFood(f, t) {
+    f.obj.visible = false;
+    f.eatenAt = t;
+    this.burst(f.obj.position, FOOD_COLORS[f.type]);
   }
 
   /** A quick puff of crumbs where something was eaten. */
@@ -480,7 +519,7 @@ export class World {
       return;
     }
     if (!this.hunt) {
-      if (!this.nextHunt) this.nextHunt = t + rand(12, 25);
+      if (!this.nextHunt) this.nextHunt = t + rand(12, 25) * (this.perks.camo ? 2 : 1);
       if (t >= this.nextHunt) this.startHunt(lead, t);
       return;
     }
@@ -497,8 +536,15 @@ export class World {
     this.huntMarker.position.set(p.x, p.y + 1.6 + (e.sp.size ?? 1) * 1.6 + Math.sin(t * 5) * 0.15, p.z);
     this.huntMarker.rotation.y += dt * 3;
 
+    // Burrowers dug in, and flyers high above a walking predator, are out of its reach:
+    // after a moment it gives up.
+    const dug = lead.dig > 0.8;
+    const aloft = !swims && lead.flying && lead.pos.y - p.y > 2.6;
+    this.hunt.lost = dug || aloft ? this.hunt.lost + dt : 0;
     const dist = lead.pos.distanceTo(p);
-    if (dist < 0.9 + (e.sp.size ?? 1) * 0.7 + lead.scale * 0.5) {
+    if (this.hunt.lost > 1.5) {
+      this.endHunt(t, dug ? 'hid' : 'flew');
+    } else if (!dug && !aloft && dist < 0.9 + (e.sp.size ?? 1) * 0.7 + lead.scale * 0.5) {
       this.onBite?.(e.sp);
       this.endHunt(t, 'caught');
     } else if (t > this.hunt.until || dist > 24) {
@@ -514,7 +560,7 @@ export class World {
       return;
     }
     const e = hunters.reduce((a, b) => (a.obj.position.distanceTo(lead.pos) < b.obj.position.distanceTo(lead.pos) ? a : b));
-    this.hunt = { e, until: t + 8, speed: 2.2 + this.era * 0.15 };
+    this.hunt = { e, until: t + 8, speed: 2.2 + this.era * 0.15, lost: 0 };
     this.huntMarker.visible = true;
     this.onHuntStart?.(e.sp);
   }
@@ -529,8 +575,8 @@ export class World {
     if (e.sp.kind === 'swimmer') e.y = p.y;
     this.hunt = null;
     this.huntMarker.visible = false;
-    this.nextHunt = t + rand(25, 45);
-    if (outcome === 'escaped') this.onHuntEnd?.(e.sp);
+    this.nextHunt = t + rand(25, 45) * (this.perks.camo ? 2 : 1);
+    if (outcome !== 'caught' && outcome !== 'cancelled') this.onHuntEnd?.(e.sp, outcome);
   }
 
   // ── Extinction events ──────────────────────────────────────────────────
@@ -601,12 +647,16 @@ export class World {
     this.mood.hemi += (this.moodTarget.hemi - this.mood.hemi) * k;
     this.mood.sun += (this.moodTarget.sun - this.mood.sun) * k;
     this.flash = Math.max(0, this.flash - dt * 1.2);
-    this.scene.background.copy(this.mood.bg).lerp(new THREE.Color(0xfff2d0), this.flash);
+    const roaming = this.active && !this.huntsPaused; // the player is out in the world, not choosing a mutation
+    this.updateDaylight(roaming ? dt : 0);
+    const day = this.daylight;
+    this.scene.background.copy(this.mood.bg).lerp(NIGHT_SKY, (1 - day) * 0.85).lerp(FLASH_SKY, this.flash);
     this.scene.fog.color.copy(this.scene.background);
-    this.scene.fog.near = this.mood.near;
-    this.scene.fog.far = this.mood.far;
-    this.hemi.intensity = this.mood.hemi + this.flash * 4;
-    this.sun.intensity = this.mood.sun;
+    const sight = (this.perks.keen ? 1.5 : 1) * (0.6 + 0.4 * day); // keen eyes see farther; everyone sees less at night
+    this.scene.fog.near = this.mood.near * sight;
+    this.scene.fog.far = this.mood.far * sight;
+    this.hemi.intensity = this.mood.hemi * (0.35 + 0.65 * day) + this.flash * 4;
+    this.sun.intensity = this.mood.sun * (0.1 + 0.9 * day);
 
     this.animations = this.animations.filter((a) => {
       a.t = Math.min(a.t + dt, a.duration);
@@ -623,8 +673,9 @@ export class World {
       this.moveFollowers(lead, dt, t);
       this.updateFood(lead, dt, t);
       this.updateHunt(lead, dt, t);
-      if (this.active && !this.aquatic) this.onLand?.(dt, this.inLake(lead.pos));
+      if (roaming && !this.aquatic) this.onLand?.(dt, this.inLake(lead.pos));
     }
+    this.moveRivals(dt, t);
 
     // Camera travels with the player, keeping the chosen orbit angle.
     this.marker.visible = !!lead;
@@ -672,7 +723,8 @@ export class World {
       const d = e.obj.position;
       // Flyers count as met when they pass overhead, unless you can fly up to them.
       const dy = e.sp.kind === 'flyer' && !p.flying ? 0 : d.y - p.pos.y;
-      if (Math.hypot(d.x - p.pos.x, dy, d.z - p.pos.z) < 2.5 + (e.sp.reach ?? 1) * (e.sp.size ?? 1)) {
+      const reach = (2.5 + (e.sp.reach ?? 1) * (e.sp.size ?? 1)) * (this.perks.keen ? 1.5 : 1);
+      if (Math.hypot(d.x - p.pos.x, dy, d.z - p.pos.z) < reach) {
         this.met.add(e.sp.id);
         this.onEncounter(e.sp);
         return;
@@ -710,11 +762,17 @@ export class World {
         : new THREE.Vector3(c.dir.x, 0, c.dir.z).normalize().multiplyScalar(0.3);
       want.y = rise * 0.8;
       c.dir.lerp(want.normalize(), Math.min(1, dt * 6)).normalize();
-      c.pos.addScaledVector(c.dir, c.speed * 1.6 * Math.max(mag, Math.abs(rise)) * dt);
+      const chill = this.perks.cold && !this.aquatic ? 0.4 + 0.6 * this.daylight : 1; // cold blood is sluggish at night
+      c.pos.addScaledVector(c.dir, c.speed * chill * 1.6 * Math.max(mag, Math.abs(rise)) * dt);
       c.moving = 1;
     } else {
       c.moving = 0.3;
     }
+    // Burrowers dig in when they keep still on the ground or the seafloor.
+    const onGround = !c.flying && (!this.aquatic || c.pos.y <= groundHeight(c.pos.x, c.pos.z) + 1.2 * c.scale);
+    c.still = c.moving < 1 ? c.still + dt : 0;
+    const digging = this.perks.burrow && onGround && c.still > 0.6;
+    c.dig += ((digging ? 1 : 0) - c.dig) * Math.min(1, dt * 4);
 
     c.pos.x = Math.max(-BOUNDS, Math.min(BOUNDS, c.pos.x));
     c.pos.z = Math.max(-BOUNDS, Math.min(BOUNDS, c.pos.z));
@@ -736,6 +794,7 @@ export class World {
       const heading = flat.lengthSq() > 0.04 ? flat.normalize() : lead.dir;
       f.dir.lerp(heading, Math.min(1, dt * 4)).normalize();
       f.moving = Math.max(lead.moving, Math.min(1, to.length()));
+      f.dig = lead.dig;
       this.poseCreature(f, dt, vertical);
     }
   }
@@ -754,6 +813,7 @@ export class World {
     const bounce = c.grow < 1 ? 1 + Math.sin(c.grow * Math.PI) * 0.35 : 1;
     c.root.scale.setScalar(c.scale * Math.max(0.05, c.grow) * bounce);
     c.root.position.copy(c.pos);
+    if (c.dig) c.root.position.y -= c.dig * (c.legHeight + 0.45) * c.scale; // dug in, just the back showing
     const look = new THREE.Vector3(c.dir.x, vertical ? Math.max(-0.6, Math.min(0.6, c.dir.y)) : 0, c.dir.z);
     // Cephalopods swim mantle-first, with their arms trailing behind, so they face away from where they go.
     if (look.lengthSq() > 1e-4) c.root.lookAt(c.pos.clone()[c.backward ? 'sub' : 'add'](look));
@@ -768,6 +828,81 @@ export class World {
     for (const p of c.parts.wingTips) p.rotation.z = Math.sin(w * 2.5 - 0.9) * 0.45; // outer wing trails the flap
     for (const p of c.parts.spin) p.rotation.z += dt * 8;
     for (const p of c.parts.flick) p.rotation.x = Math.sin(w * 1.6) * 0.3;
+  }
+
+  // ── Day and night on land ──────────────────────────────────────────────
+
+  /** Land days turn to night and back while the player roams; the sea keeps its light. */
+  updateDaylight(dt) {
+    if (this.aquatic) {
+      this.daylight = 1;
+      return;
+    }
+    this.dayTime += dt;
+    const a = (this.dayTime / DAY_SECONDS) * Math.PI * 2;
+    const height = Math.sin(a); // the sun's height: up by day, below the horizon at night
+    this.daylight = smoothstep(-0.2, 0.25, height);
+    this.sun.position.set(Math.cos(a) * 22, 6 + 19 * Math.max(0, height), 8);
+    const night = this.daylight < 0.3;
+    if (night === this.night) return;
+    this.night = night;
+    if (this.active) (night ? this.onNightfall : this.onSunrise)?.();
+  }
+
+  // ── The rival lineage ──────────────────────────────────────────────────
+
+  /**
+   * A few members of the rival lineage roam the world when it shares the player's habitat
+   * (`here`). When their diets overlap (`eats`) they go for the player's food.
+   */
+  setRival(rival, { here, eats }) {
+    this.clear(this.rivalGroup);
+    this.rivalEats = eats;
+    this.rivals = !here ? [] : Array.from({ length: RIVAL_KIN }, () => {
+      const built = buildCreature(rival);
+      this.rivalGroup.add(built.root);
+      const [x, z] = this.aquatic ? [rand(-18, 18), rand(-18, 18)] : this.dryPoint();
+      return {
+        ...built, pos: new THREE.Vector3(x, this.aquatic ? rand(2, 6) : 0, z), dir: new THREE.Vector3(1, 0, 0),
+        phase: rand(0, 6), anim: 0, moving: 1, grow: 1, flying: rival.tags.has('flight'),
+        // A little slower than the player, so a quick player can get to the food first.
+        speed: (0.9 + rival.traits.speed * 0.25) * (rival.era === 0 ? 0.5 : 1) * 0.7,
+        food: null, wander: null,
+      };
+    });
+  }
+
+  /** Rivals head for the nearest food (when they eat what the player eats) or wander. */
+  moveRivals(dt, t) {
+    for (const r of this.rivals) {
+      const vertical = this.aquatic || r.flying;
+      if (r.food && r.food.eatenAt !== null) r.food = null; // someone else got there first
+      if (!r.food && this.rivalEats && this.active) {
+        const left = this.food.filter((f) => f.eatenAt === null);
+        r.food = left.length ? left.reduce((a, b) => (a.obj.position.distanceTo(r.pos) < b.obj.position.distanceTo(r.pos) ? a : b)) : null;
+      }
+      if (!r.food && !r.wander) {
+        const [x, z] = this.aquatic ? [rand(-22, 22), rand(-22, 22)] : this.dryPoint();
+        r.wander = new THREE.Vector3(x, this.aquatic ? rand(2, 8) : 0, z);
+      }
+      const to = (r.food ? r.food.obj.position : r.wander).clone().sub(r.pos);
+      if (!vertical) to.y = 0;
+      if (to.length() < 0.6 + r.scale * 0.6) {
+        if (r.food && this.active) this.eatFood(r.food, t);
+        r.food = r.wander = null;
+      } else {
+        r.dir.lerp(to.normalize(), Math.min(1, dt * 3)).normalize();
+        r.pos.addScaledVector(r.dir, r.speed * dt);
+      }
+      this.poseCreature(r, dt, vertical);
+    }
+    const lead = this.rivals[0];
+    this.rivalMarker.visible = !!lead && this.active;
+    if (lead) {
+      this.rivalMarker.position.copy(lead.pos);
+      this.rivalMarker.position.y += (0.9 + Math.sin(t * 3 + 1) * 0.12) * lead.scale + 0.6;
+      this.rivalMarker.rotation.y += dt * 2;
+    }
   }
 
   clear(group) {

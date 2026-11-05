@@ -152,6 +152,13 @@ def main():
 
             check(dict(eras).get('Body Plans') == ['exoskeleton', 'spine', 'tentacles'], 'Body Plans offers tentacles as a third body plan')
 
+            print('Rival lineage')
+            load(page, url)
+            page.click('#start')
+            page.wait_for_selector('#modal .era-intro')
+            check(visible(page, '#modal .rival-intro'), 'the first era introduces the rival lineage')
+            check('Rival' in page.inner_text('#species-panel .rival'), 'the species panel shows the rival')
+
             print('A full game')
             saved = lambda: page.evaluate("JSON.parse(localStorage.getItem('lineage.runs') || '[]').length")
             runs_before = saved()

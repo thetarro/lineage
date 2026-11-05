@@ -44,7 +44,7 @@ const CHOICE_BY_NAME = Object.fromEntries(Object.entries(CHOICES).map(([id, c]) 
 /** What a run's species looked like. Runs saved before 1.9.2 have no `look`: replay their choices to rebuild it. */
 export function runLook(run) {
   if (run.look) return run.look;
-  const g = createGame({ name: run.name });
+  const g = createGame({ name: run.name, rival: false });
   for (const h of run.history) {
     const id = h.kind !== 'event' && CHOICE_BY_NAME[h.name];
     if (id) applyChoice(g, id, h.kind);

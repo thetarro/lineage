@@ -54,6 +54,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .meter.water .meter-fill { background: var(--water); }
 .meter.oxygen .meter-fill { background: var(--oxygen); }
 .meter.moisture .meter-fill { background: #6fcf8a; transition: width 0.2s linear; }
+.meter.energy .meter-fill { background: #ff8a3d; transition: width 0.2s linear; }
 .meter.low .meter-value { color: var(--bad); animation: blink 1s infinite; }
 @keyframes blink { 50% { opacity: 0.4; } }
 
@@ -67,6 +68,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .pips i { width: 9px; height: 9px; border-radius: 2px; background: rgba(255, 255, 255, 0.1); }
 .pips i.on { background: var(--accent); }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.rival { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.1); font-size: 13px; }
+.rival-name i { font-weight: 600; }
+.rival-status { color: var(--muted); margin-top: 2px; }
+.rival-status .good { color: var(--good); }
+.rival-status .bad { color: var(--bad); }
+.rival-fate { color: var(--muted); font-size: 14px; }
+.rival-intro { color: var(--warn); font-size: 14px; }
 .chip { font-size: 11px; background: rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 2px 8px; }
 
 #warning {
@@ -135,6 +143,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .fx.bad { color: var(--bad); }
 .fx.diet { color: var(--warn); }
 .fx.lean { color: #c9a0ff; }
+.fx.omen { font-weight: 600; }
 .cards.small .card { width: 190px; padding: 10px 12px; }
 .cards.small .card-icon { font-size: 26px; }
 .cards.small .card-name { font-size: 14px; }
