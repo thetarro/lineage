@@ -889,14 +889,45 @@ function buildCreature(g) {
   const front = len * 0.45;
 
   // Head, eyes and mouth.
-  if (tags.has('intelligence')) {
-    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), bodyMat);
-    dome.position.set(0, 0.22, front - 0.05);
-    root.add(dome);
-  }
   const eyeR = (tags.has('keenEyes') ? 0.13 : 0.09) * (tags.has('cephalopod') ? 1.4 : 1);
   const eyeY = tags.has('amphibian') ? 0.23 : 0.14; // frogs' eyes bulge from the top of the head
-  for (const side of [-1, 1]) {
+  // Intelligent species carry a big head high on a short neck: a domed cranium, forward-facing
+  // eyes under a brow, the mouth moved down onto the face, and a twig held as a tool.
+  const smart = tags.has('intelligence');
+  let mouthY = -0.1, mouthZ = front;
+  if (smart) {
+    const head = new THREE.Vector3(0, 0.42, front + 0.18);
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 0.4, 8), bodyMat);
+    neck.position.set(0, 0.24, front + 0.06);
+    neck.rotation.x = 0.6;
+    const cranium = new THREE.Mesh(new THREE.SphereGeometry(0.31, 12, 10), bodyMat);
+    cranium.position.copy(head);
+    cranium.scale.set(1, 1.05, 0.95);
+    const brow = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 4), mat(color.clone().multiplyScalar(0.8)));
+    brow.position.set(0, head.y + 0.13, head.z + 0.23);
+    brow.scale.set(2.2, 0.35, 0.8);
+    root.add(neck, cranium, brow);
+    for (const side of [-1, 1]) {
+      const r = eyeR * 1.05;
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), mat(0xffffff, { flatShading: false }));
+      eye.position.set(side * 0.12, head.y + 0.03, head.z + 0.25);
+      const pupil = new THREE.Mesh(new THREE.SphereGeometry(r * 0.55, 8, 6), mat(0x111111, { flatShading: false }));
+      pupil.position.set(-side * r * 0.1, 0, r * 0.62);
+      eye.add(pupil);
+      root.add(eye);
+    }
+    mouthY = head.y - 0.15;
+    mouthZ = head.z + 0.22;
+    const twig = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.03, 0.6, 5), mat(0x6b4a2b));
+    twig.position.set(0, mouthY - 0.02, mouthZ + 0.06);
+    twig.rotation.set(0.25, 0, Math.PI / 2 - 0.25);
+    const fork = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.018, 0.22, 4), mat(0x6b4a2b));
+    fork.position.set(-0.06, 0.2, 0);
+    fork.rotation.z = 0.6;
+    twig.add(fork);
+    root.add(twig);
+  }
+  for (const side of smart ? [] : [-1, 1]) {
     if (tags.has('exoskeleton')) {
       // Compound eyes: dark, glossy domes made of many facets.
       const eye = new THREE.Mesh(
@@ -920,14 +951,14 @@ function buildCreature(g) {
     const teeth = line === 'carnivore' ? 4 : 2;
     for (let i = 0; i < teeth; i++) {
       const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.14, 4), toothMat);
-      tooth.position.set((i - (teeth - 1) / 2) * 0.08, -0.1, front + 0.02);
+      tooth.position.set((i - (teeth - 1) / 2) * 0.08, mouthY, mouthZ + 0.02);
       tooth.rotation.x = Math.PI;
       root.add(tooth);
     }
   }
   if (line === 'herbivore' || line === 'omnivore') {
     const snout = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), mat(color.clone().lerp(new THREE.Color(0xffffff), 0.3)));
-    snout.position.set(0, -0.05, front + 0.03);
+    snout.position.set(0, mouthY + 0.05, mouthZ + 0.03);
     root.add(snout);
   }
 

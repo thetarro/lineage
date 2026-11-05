@@ -586,7 +586,6 @@ export const EVENTS = {
       { tag: 'burrower', value: 0.08, label: 'Shelter in sediment' },
       { tag: 'detritivore', value: 0.08, label: 'Feeds on the dead' },
       { tag: 'filterFeeder', value: -0.1, label: 'Plankton crashes' },
-      { tag: 'exoskeleton', value: -0.05, label: 'Trilobites decimated' },
       { tag: 'fast', value: 0.05, label: 'Follows the shrinking warm seas' },
     ],
     shock: { plankton: 0.5, shellfish: 0.6 },
