@@ -33,6 +33,8 @@ export function runRecord(g, date = Date.now()) {
     history: g.history.map(({ era, mya, kind, name, icon, survival, survived }) => ({ era, mya, kind, name, icon, survival, survived })),
     era: g.era, status: g.status, mya: g.mya, causeOfDeath: g.causeOfDeath,
     descendant: { icon: d.icon, name: d.name },
+    // What it looked like at the end, for its portrait: the fields the creature builder reads.
+    look: { tags: [...g.tags], line: g.diet?.line ?? null, size: g.traits.size, era: g.era },
   };
 }
 
@@ -101,6 +103,7 @@ function runHTML(run) {
         <button class="codex-back" id="gallery-list">← All lineages</button>
         <h2>${run.won ? '🏆' : '🦴'} <i>${esc(run.name)}</i></h2>
       </div>
+      ${run.look ? `<img class="codex-hero run-portrait" alt="${esc(run.name)}">` : ''}
       <div class="stats">
         <div><b>${run.lifespan.toLocaleString()}</b><span>million years</span></div>
         <div><b>${fmtPop(run.peak)}</b><span>peak population</span></div>
@@ -118,6 +121,11 @@ export function openGallery(onClose) {
     showModal(listHTML(runs), { wide: true, buttons: { '#gallery-close': onClose } });
     document.querySelectorAll('#modal-content .run').forEach((el) => el.addEventListener('click', () => showRun(runs[+el.dataset.i])));
   };
-  const showRun = (run) => showModal(runHTML(run), { wide: true, buttons: { '#gallery-list': showList } });
+  const showRun = (run) => {
+    showModal(runHTML(run), { wide: true, buttons: { '#gallery-list': showList } });
+    const img = document.querySelector('#modal-content .run-portrait');
+    // Loaded on demand: the 3D code only runs in the browser, and the rest of this module also runs in Node.
+    if (img) import('./world.js').then(({ creaturePortrait }) => { img.src = creaturePortrait(run.look); });
+  };
   showList();
 }

@@ -23,6 +23,7 @@ test('a run record keeps what the gallery and its timeline need', () => {
   assert.equal(run.lifespan, Math.round(G.lifespanMyr(g)));
   assert.deepEqual(run.descendant, { icon: '🕷️', name: 'Spiders' });
   assert.equal(run.history.length, g.history.length);
+  assert.deepEqual(run.look, { tags: [...g.tags], line: 'omnivore', size: g.traits.size, era: g.era });
   assert.ok(JSON.parse(JSON.stringify(run)), 'it must survive being stored as JSON');
 });
 

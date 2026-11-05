@@ -169,6 +169,8 @@ def main():
             page.click('.run')
             page.wait_for_selector('.gallery .tl')
             check(page.locator('.gallery .tl-col').count() >= 2, "a past lineage's timeline can be opened")
+            page.wait_for_function("document.querySelector('.gallery .run-portrait')?.src.startsWith('data:image/png')", timeout=10000)
+            check(page.evaluate("document.querySelector('.gallery .run-portrait').naturalWidth") > 0, 'a past lineage shows what it looked like')
             page.click('#gallery-list')
             page.click('#gallery-close')
             page.wait_for_selector('#start')

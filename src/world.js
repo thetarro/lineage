@@ -5,6 +5,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { LINE_COLORS } from './data.js';
 import { SPECIES, lifeFor } from './fauna.js';
+import { snapshot } from './snapshot.js';
 
 const WATER_LEVEL = -0.4; // land-mode lakes and shoreline
 const BOUNDS = 26; // how far the player can roam from the center
@@ -825,6 +826,11 @@ function buildFood(type, aquatic) {
 // ── Creature construction ───────────────────────────────────────────────
 
 /** Build one individual. Its body plan is read straight from the species' tags. */
+/** A still picture of a species as it looked: the fields buildCreature reads, as a past lineage stores them. */
+export function creaturePortrait({ tags, line, size, era }) {
+  return snapshot(buildCreature({ tags: new Set(tags), diet: line ? { line } : null, traits: { size }, era }).root);
+}
+
 function buildCreature(g) {
   const tags = g.tags;
   const root = new THREE.Group();

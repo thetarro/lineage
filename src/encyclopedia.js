@@ -2,12 +2,12 @@
 // Undiscovered species show as locked silhouettes. Thumbnails are rendered from the
 // same low-poly builders the world uses.
 
-import * as THREE from 'three';
 import { SPECIES, speciesByEra } from './fauna.js';
 import { whereToFind } from './species.js';
 import { ERAS } from './data.js';
 import { showModal, fmtMya } from './ui.js';
 import { ENTRIES } from './encyclopedia-entries.js';
+import { snapshot } from './snapshot.js';
 
 // ── Discoveries (kept across games in this browser) ──────────────────────
 
@@ -49,44 +49,13 @@ function whereHint(id) {
 
 // ── Thumbnails ────────────────────────────────────────────────────────────
 
-let thumbRenderer = null;
 const thumbs = new Map();
 
 /** A transparent PNG of the species' model; undiscovered ones as a flat silhouette. */
 function thumbnail(sp, locked) {
   const key = `${sp.id}:${locked}`;
-  if (thumbs.has(key)) return thumbs.get(key);
-  if (!thumbRenderer) {
-    thumbRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
-    thumbRenderer.setPixelRatio(1);
-    thumbRenderer.setSize(240, 180);
-  }
-  const scene = new THREE.Scene();
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.6));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.8);
-  sun.position.set(3, 5, 4);
-  scene.add(sun);
-  if (locked) scene.overrideMaterial = new THREE.MeshBasicMaterial({ color: 0x24323e });
-
-  const obj = sp.build();
-  scene.add(obj);
-  const box = new THREE.Box3().setFromObject(obj);
-  const center = box.getCenter(new THREE.Vector3());
-  const radius = box.getSize(new THREE.Vector3()).length() / 2;
-  const camera = new THREE.PerspectiveCamera(35, 240 / 180, 0.01, 1000);
-  const dist = radius / Math.sin((35 / 2) * (Math.PI / 180)) * 0.85;
-  camera.position.copy(center).add(new THREE.Vector3(0.85, 0.45, 1).normalize().multiplyScalar(dist));
-  camera.lookAt(center);
-
-  thumbRenderer.render(scene, camera);
-  const url = thumbRenderer.domElement.toDataURL('image/png');
-  obj.traverse((o) => {
-    o.geometry?.dispose();
-    if (o.material) [].concat(o.material).forEach((m) => m.dispose());
-  });
-  scene.overrideMaterial?.dispose();
-  thumbs.set(key, url);
-  return url;
+  if (!thumbs.has(key)) thumbs.set(key, snapshot(sp.build(), { silhouette: locked }));
+  return thumbs.get(key);
 }
 
 /** Fill thumbnails a few per frame so the page opens instantly. */
