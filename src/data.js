@@ -55,6 +55,24 @@ export const ENERGY_SHARE = 0.03;
 // choice with chance RIVAL_FOLLOWS, when it can.
 export const COMPETITION = 0.2;
 export const RIVAL_FOLLOWS = 0.5;
+// A carnivore bigger than its rival can hunt the rival's members in the world: each catch
+// takes this share of the rival's population (it can drive it extinct) and is a meal.
+export const RIVAL_HUNT_SHARE = 0.12;
+
+// Last stands: one desperate choice just before a mass extinction strikes. `cost` is the
+// share of the population lost at once (burrowers dig in cheaply), `survival` adds to the
+// odds, `growth` adds to the population at once and `food` changes the Food meter.
+export const STANDS = {
+  endure: { name: 'Endure', icon: '🪨', desc: 'Change nothing. Trust the traits you already have.' },
+  hide: {
+    name: 'Hide and Wait', icon: '🕳️', desc: 'Shelter until the worst is over. More of you live through it, but many starve in hiding.',
+    survival: 0.15, cost: 0.25, burrowerCost: 0.15,
+  },
+  breed: {
+    name: 'Breed Fast', icon: '🥚', desc: 'Pour everything into one last brood. More of you face it, but hungrier.',
+    growth: 0.3, food: -40,
+  },
+};
 export const GENERATIONS_PER_ERA = 2;
 
 export const LINE_COLORS = { carnivore: 0xd9534f, omnivore: 0xe0a030, herbivore: 0x5cb85c };

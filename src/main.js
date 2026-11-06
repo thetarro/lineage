@@ -3,12 +3,13 @@
 import { World } from './world.js';
 import * as G from './game.js';
 import * as UI from './ui.js';
-import { ERAS, GENERATIONS_PER_ERA, FORAGE_CAP } from './data.js';
+import { ERAS, GENERATIONS_PER_ERA, FORAGE_CAP, STANDS } from './data.js';
 import { Joystick } from './controls.js';
 import { Sound } from './audio.js';
 import { VERSION } from './version.js';
 import { openEncyclopedia, loadDiscovered, saveDiscovered, progress } from './encyclopedia.js';
 import { openGallery, loadRuns, runRecord, saveRun } from './gallery.js';
+import { openHowTo, seenHowTo } from './howto.js';
 
 const world = new World(document.getElementById('scene'));
 const joystick = new Joystick();
@@ -72,12 +73,35 @@ world.onHuntEnd = (sp, how) => {
   UI.log(msg);
 };
 
-// Cold-blooded species slow down in the chill of night on land.
+// Night on land: a hushed soundscape, and cold-blooded species slow down in the chill.
 world.onNightfall = () => {
+  sound.setNight(true);
   if (world.perks.cold) UI.toast('🌙 Night falls. Your cold blood slows you down until the sun rises.', 3500);
 };
 world.onSunrise = () => {
+  sound.setNight(false);
   if (world.perks.cold) UI.toast('☀️ The sun is up: you warm up and speed up again.', 3000);
+};
+world.onDig = () => sound.dig();
+
+// The rival races the player to food; a bigger carnivore can hunt it down.
+let rivalNotices = new Set(); // what has been explained about the rival this game
+const noticeOnce = (key, html, ms) => {
+  if (rivalNotices.has(key)) return;
+  rivalNotices.add(key);
+  UI.toast(html, ms);
+};
+world.onRivalEat = () => {
+  sound.rivalAte();
+  noticeOnce('ate', `<div class="toast-kicker">⚔️ Your rival got there first</div><i>${UI.esc(game.rival.name)}</i> (marked in orange) eats your food. Beat it to the next one!`, 4500);
+};
+world.onRivalCaught = () => {
+  const r = G.huntRival(game);
+  UI.renderHUD(game);
+  sound.bite();
+  UI.log(`🩸 You caught one of your rival <i>${UI.esc(game.rival.name)}</i>: <span class="good">-${UI.fmtPop(r.lost)}</span> of its kind.`);
+  if (r.extinct) rivalGone(game.rival.causeOfDeath);
+  else UI.toast(`🩸 You caught one of your rival's kind: −${UI.fmtPop(r.lost)}.`, 2500);
 };
 
 // Amphibians must keep going back to the water: their skin dries out on land.
@@ -149,6 +173,7 @@ function setHabitat() {
   UI.setLife(world.contemporaries, world.met);
   sound.setTheme(world.themeKey);
   joystick.setVertical(world.aquatic || game.tags.has('flight'));
+  sound.setNight(false); // every scene starts in the morning
   showRival();
 }
 
@@ -156,11 +181,21 @@ function setHabitat() {
 function showRival() {
   const rival = game.rival;
   const here = rival?.status === 'alive' && G.habitat(rival) === G.habitat(game);
-  world.setRival(rival, { here, eats: G.competition(game, rival) > 0 });
+  world.setRival(rival, { here, eats: G.competition(game, rival) > 0, prey: false });
+  updateRivalPrey();
+}
+
+/** Growing bigger (or the rival shrinking) can make it prey: say so the first time. */
+function updateRivalPrey() {
+  world.rivalPrey = G.canHuntRival(game);
+  if (world.rivalPrey && game.diet) {
+    noticeOnce('prey', `<div class="toast-kicker">🍖 You can hunt your rival</div>You are a bigger carnivore than <i>${UI.esc(game.rival.name)}</i>. Catch its members (marked in orange) to thin its numbers.`, 6000);
+  }
 }
 
 function titleScreen() {
   game = G.createGame();
+  rivalNotices = new Set();
   world.met.clear();
   setHabitat();
   world.setCreature(game);
@@ -185,6 +220,7 @@ function titleModal() {
         <button class="primary" id="start">Begin as a single cell</button>
         <button class="secondary" id="codex">📖 Encyclopedia <small>${found}/${total}</small></button>
         <button class="secondary" id="gallery">🏛️ Past lineages <small>${loadRuns().length}</small></button>
+        <button class="secondary" id="howto">❓ How to play</button>
       </div>
       <p class="hint">
         <span class="desktop">Swim, crawl or walk with the joystick or WASD · meet the life of each era · Space/Shift to rise and sink<br>Drag to orbit · scroll to zoom · M to mute</span>
@@ -202,15 +238,25 @@ function titleModal() {
         game.name = document.getElementById('species-name').value.trim() || game.name;
         openGallery(titleModal);
       },
+      '#howto': () => {
+        game.name = document.getElementById('species-name').value.trim() || game.name;
+        openHowTo(titleModal, { doneLabel: 'Back to the title' });
+      },
       '#start': () => {
         game.name = document.getElementById('species-name').value.trim() || game.name;
-        UI.hideModal();
-        UI.clearLog();
-        joystick.show(true);
-        startEra();
+        // The first game opens with how to play.
+        if (seenHowTo()) begin();
+        else openHowTo(begin, { doneLabel: "Let's begin" });
       },
     },
   });
+}
+
+function begin() {
+  UI.hideModal();
+  UI.clearLog();
+  joystick.show(true);
+  startEra();
 }
 
 function startEra() {
@@ -276,6 +322,7 @@ function liveGeneration() {
     <span class="${d >= 0 ? 'good' : 'bad'}">(${d >= 0 ? '+' : '-'}${UI.fmtPop(Math.abs(d))})</span>,
     food ${food >= 0 ? '+' : ''}${Math.round(food)}.${r.eaten ? ` Predators took ${UI.fmtPop(r.eaten)}.` : ''}${r.competition >= 0.01 ? ` Your rival took ${Math.round(r.competition * 100)}% of your food.` : ''}`);
   if (r.rivalExtinct) rivalGone(game.rival.causeOfDeath);
+  else updateRivalPrey(); // the rival's own mutation may have changed its size
   if (game.status === 'extinct') return ending();
   mutationPhase();
 }
@@ -294,6 +341,7 @@ function mutationPhase() {
       world.huntsPaused = false;
       const c = G.applyChoice(game, id, 'minor');
       UI.log(`${c.icon} Mutation: <b>${c.name}</b>.`);
+      updateRivalPrey();
       world.setCreature(game, { evolve: true });
       sound.evolve();
       UI.renderHUD(game);
@@ -311,27 +359,35 @@ function eventPhase() {
   }
   UI.setActions('<button class="primary big danger" id="face">⚠ Face what is coming</button>', {
     buttons: {
-      '#face': async () => {
+      '#face': () => {
         world.active = false;
         UI.setActions('');
-        UI.hideWarning();
-        UI.banner(`${ev.icon} ${ev.name}`, 3200);
-        sound.extinction(ERAS[game.era].event);
-        await world.playEvent(ERAS[game.era].event);
-        const r = G.resolveEvent(game);
-        UI.renderHUD(game);
-        UI.log(`${ev.icon} <b>${ev.name}</b>: ${Math.round(r.survival * 100)}% survived.`);
-        if (r.rival && !r.rival.survived) UI.log(`⚔️ Your rival <i>${UI.esc(r.rival.name)}</i> did not survive it.`);
-        if (r.survived) sound.survived();
-        else sound.wipedOut();
-        UI.showModal(UI.eventResultHTML(r), {
-          buttons: {
-            '#continue': () => {
-              UI.hideModal();
-              if (r.survived) { sound.duck(1, 3); nextEra(); } else ending();
-            },
-          },
-        });
+        sound.danger();
+        UI.showModal(UI.standHTML(game, ev), { onPick: (stand) => strike(ev, stand) });
+      },
+    },
+  });
+}
+
+/** The extinction strikes, after the player's last stand. */
+async function strike(ev, stand) {
+  const s = STANDS[stand];
+  if (stand !== 'endure') UI.log(`${s.icon} Last stand: <b>${s.name}</b>.`);
+  UI.hideWarning();
+  UI.banner(`${ev.icon} ${ev.name}`, 3200);
+  sound.extinction(ERAS[game.era].event);
+  await world.playEvent(ERAS[game.era].event);
+  const r = G.resolveEvent(game, stand);
+  UI.renderHUD(game);
+  UI.log(`${ev.icon} <b>${ev.name}</b>: ${Math.round(r.survival * 100)}% survived.`);
+  if (r.rival && !r.rival.survived) UI.log(`⚔️ Your rival <i>${UI.esc(r.rival.name)}</i> did not survive it.`);
+  if (r.survived) sound.survived();
+  else sound.wipedOut();
+  UI.showModal(UI.eventResultHTML(r), {
+    buttons: {
+      '#continue': () => {
+        UI.hideModal();
+        if (r.survived) { sound.duck(1, 3); nextEra(); } else ending();
       },
     },
   });

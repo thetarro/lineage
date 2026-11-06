@@ -159,6 +159,10 @@ export class World {
     this.stage.add(this.rivalGroup);
     this.rivals = []; // the rival lineage's roaming members
     this.rivalEats = false; // whether they go for the player's food
+    this.rivalPrey = false; // whether the player can hunt them
+    this.onRivalEat = null; // a rival ate food near the player
+    this.onRivalCaught = null;
+    this.onDig = null; // the player's burrower dug in
     // Abilities the player's traits grant in the world.
     this.perks = { burrow: false, keen: false, camo: false, cold: false };
     this.dayTime = 0; // seconds into the current land day
@@ -772,6 +776,7 @@ export class World {
     const onGround = !c.flying && (!this.aquatic || c.pos.y <= groundHeight(c.pos.x, c.pos.z) + 1.2 * c.scale);
     c.still = c.moving < 1 ? c.still + dt : 0;
     const digging = this.perks.burrow && onGround && c.still > 0.6;
+    if (digging && c.dig < 0.05 && this.active) this.onDig?.();
     c.dig += ((digging ? 1 : 0) - c.dig) * Math.min(1, dt * 4);
 
     c.pos.x = Math.max(-BOUNDS, Math.min(BOUNDS, c.pos.x));
@@ -853,17 +858,18 @@ export class World {
 
   /**
    * A few members of the rival lineage roam the world when it shares the player's habitat
-   * (`here`). When their diets overlap (`eats`) they go for the player's food.
+   * (`here`). When their diets overlap (`eats`) they go for the player's food; when the
+   * player can hunt them (`prey`) they flee from it.
    */
-  setRival(rival, { here, eats }) {
+  setRival(rival, { here, eats, prey }) {
     this.clear(this.rivalGroup);
     this.rivalEats = eats;
+    this.rivalPrey = prey;
     this.rivals = !here ? [] : Array.from({ length: RIVAL_KIN }, () => {
       const built = buildCreature(rival);
       this.rivalGroup.add(built.root);
-      const [x, z] = this.aquatic ? [rand(-18, 18), rand(-18, 18)] : this.dryPoint();
       return {
-        ...built, pos: new THREE.Vector3(x, this.aquatic ? rand(2, 6) : 0, z), dir: new THREE.Vector3(1, 0, 0),
+        ...built, pos: this.farPoint(), dir: new THREE.Vector3(1, 0, 0),
         phase: rand(0, 6), anim: 0, moving: 1, grow: 1, flying: rival.tags.has('flight'),
         // A little slower than the player, so a quick player can get to the food first.
         speed: (0.9 + rival.traits.speed * 0.25) * (rival.era === 0 ? 0.5 : 1) * 0.7,
@@ -872,10 +878,44 @@ export class World {
     });
   }
 
-  /** Rivals head for the nearest food (when they eat what the player eats) or wander. */
+  /** A spot well away from the player, where rivals appear. */
+  farPoint() {
+    let best = null;
+    for (let i = 0; i < 8; i++) {
+      const [x, z] = this.aquatic ? [rand(-20, 20), rand(-20, 20)] : this.dryPoint();
+      const p = new THREE.Vector3(x, this.aquatic ? rand(2, 6) : 0, z);
+      const d = this.player ? p.distanceTo(this.player.pos) : 99;
+      if (!best || d > best.d) best = { p, d };
+      if (d > 15) break;
+    }
+    return best.p;
+  }
+
+  /**
+   * Rivals head for the nearest food (when they eat what the player eats) or wander; when the
+   * player can hunt them, they flee once it comes close, and a catch sends one far away.
+   */
   moveRivals(dt, t) {
+    const lead = this.player;
     for (const r of this.rivals) {
       const vertical = this.aquatic || r.flying;
+      const hunted = this.rivalPrey && this.active && lead;
+      if (hunted && r.pos.distanceTo(lead.pos) < 0.9 + r.scale * 0.6 + lead.scale * 0.5) {
+        this.burst(r.pos, 0xc2453c);
+        r.pos = this.farPoint();
+        r.food = r.wander = null;
+        this.onRivalCaught?.();
+        continue;
+      }
+      if (hunted && r.pos.distanceTo(lead.pos) < 7) {
+        // Run from the player, toward a fresh spot on the far side.
+        const away = r.pos.clone().sub(lead.pos);
+        if (!vertical) away.y = 0;
+        r.wander = r.pos.clone().addScaledVector(away.normalize(), 6);
+        r.wander.x = Math.max(-BOUNDS, Math.min(BOUNDS, r.wander.x));
+        r.wander.z = Math.max(-BOUNDS, Math.min(BOUNDS, r.wander.z));
+        r.food = null;
+      }
       if (r.food && r.food.eatenAt !== null) r.food = null; // someone else got there first
       if (!r.food && this.rivalEats && this.active) {
         const left = this.food.filter((f) => f.eatenAt === null);
@@ -888,7 +928,10 @@ export class World {
       const to = (r.food ? r.food.obj.position : r.wander).clone().sub(r.pos);
       if (!vertical) to.y = 0;
       if (to.length() < 0.6 + r.scale * 0.6) {
-        if (r.food && this.active) this.eatFood(r.food, t);
+        if (r.food && this.active) {
+          this.eatFood(r.food, t);
+          if (lead && r.pos.distanceTo(lead.pos) < 12) this.onRivalEat?.();
+        }
         r.food = r.wander = null;
       } else {
         r.dir.lerp(to.normalize(), Math.min(1, dt * 3)).normalize();
@@ -896,11 +939,11 @@ export class World {
       }
       this.poseCreature(r, dt, vertical);
     }
-    const lead = this.rivals[0];
-    this.rivalMarker.visible = !!lead && this.active;
-    if (lead) {
-      this.rivalMarker.position.copy(lead.pos);
-      this.rivalMarker.position.y += (0.9 + Math.sin(t * 3 + 1) * 0.12) * lead.scale + 0.6;
+    const first = this.rivals[0];
+    this.rivalMarker.visible = !!first && this.active;
+    if (first) {
+      this.rivalMarker.position.copy(first.pos);
+      this.rivalMarker.position.y += (0.9 + Math.sin(t * 3 + 1) * 0.12) * first.scale + 0.6;
       this.rivalMarker.rotation.y += dt * 2;
     }
   }

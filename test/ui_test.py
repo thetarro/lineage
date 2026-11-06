@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # Software WebGL, so the tests also run on machines without a GPU.
 CHROMIUM_ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']
 failures = []
+stand_offers = []  # the last stands offered before each extinction played
 failed_requests = []
 page_errors = []
 
@@ -73,6 +74,10 @@ def play(page, url, want=(), stop_at=None):
             page.click('#continue')
         elif visible(page, '#face'):
             page.click('#face')
+            page.wait_for_selector('#modal .stand', state='visible')
+            ids = [c.get_attribute('data-id') for c in page.query_selector_all('#modal .card')]
+            stand_offers.append(ids)
+            page.click(f'#modal .card[data-id="{next((w for w in want if w in ids), ids[0])}"]')
             page.wait_for_selector('#continue', state='visible', timeout=45000)  # slow on busy machines with software rendering
         elif visible(page, '#live'):
             page.click('#live')
@@ -103,6 +108,25 @@ def main():
             load(page, url)
             check(page.inner_text('.version') == f'v{version}', f'shows v{version}')
             check('0/' in page.inner_text('#codex'), 'encyclopedia starts with nothing discovered')
+
+            print('How to play')
+            page.click('#start')
+            page.wait_for_selector('#modal .howto')
+            pages = 1
+            while visible(page, '#howto-next'):
+                page.click('#howto-next')
+                pages += 1
+            check(pages == 3, f'the first game opens with how to play ({pages} pages)')
+            page.click('#howto-done')
+            page.wait_for_selector('#modal .era-intro')
+            check(True, 'finishing it starts the game')
+            load(page, url)
+            page.click('#howto')
+            page.wait_for_selector('#modal .howto')
+            page.click('#howto-skip')
+            page.wait_for_selector('#start')
+            check(True, 'it can be read again from the title screen')
+            load(page, url)
 
             print('Encyclopedia, before discovering anything')
             page.fill('#species-name', 'Testus "quoted" maximus')
@@ -162,8 +186,9 @@ def main():
             print('A full game')
             saved = lambda: page.evaluate("JSON.parse(localStorage.getItem('lineage.runs') || '[]').length")
             runs_before = saved()
-            eras, outcome = play(page, url)
+            eras, outcome = play(page, url, want=['hide'])
             check(outcome in ('won', 'extinct'), f'reaches the ending screen ({outcome} after {len(eras)} eras)')
+            check(stand_offers and all(o == ['endure', 'hide', 'breed'] for o in stand_offers), f'a last stand is offered before every extinction ({len(stand_offers)} seen)')
             group = page.inner_text('#modal .epilogue b') if visible(page, '#modal .epilogue') else ''
             check(bool(group), f'the ending names the living group the lineage resembles ({group or "missing"})')
 

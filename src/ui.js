@@ -1,7 +1,7 @@
 // DOM overlay: HUD panels, choice cards, modals and the event log.
 
-import { CHOICES, ERAS, TRAIT_NAMES, GENERATIONS_PER_ERA } from './data.js';
-import { carryingCapacity, upcomingEvent, habitat, needsWater, burnsEnergy, competition, eventOutlook } from './game.js';
+import { CHOICES, ERAS, TRAIT_NAMES, GENERATIONS_PER_ERA, STANDS } from './data.js';
+import { carryingCapacity, upcomingEvent, habitat, needsWater, burnsEnergy, competition, eventOutlook, canHuntRival, standCost } from './game.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -87,9 +87,10 @@ function rivalHTML(g) {
     : habitat(r) !== habitat(g) ? `Lives ${habitat(r) === 'aquatic' ? 'in the sea' : 'on land'}, out of your way`
       : taken ? `<span class="bad">Takes ${taken}% of your food</span>` : 'Eats different food';
   const icons = r.history.filter((h) => h.kind === 'fork').map((h) => h.icon).join(' ');
+  const prey = canHuntRival(g) ? '<div class="rival-status good">🍖 Bigger than it: you can hunt it</div>' : '';
   return `<div class="rival" title="Another lineage evolving alongside yours. Where your diets overlap, it eats your food.">
     <div class="rival-name">⚔️ Rival: <i>${esc(r.name)}</i></div>
-    <div class="rival-status">${icons ? `${icons} · ` : ''}${status}</div></div>`;
+    <div class="rival-status">${icons ? `${icons} · ` : ''}${status}</div>${prey}</div>`;
 }
 
 /** Live update of a real-time meter (amphibians' Skin, warm-blooded Energy), without rebuilding the HUD every frame. */
@@ -219,6 +220,31 @@ export function timelineHTML(g) {
   return `<div class="tl"><div class="tl-track">${cols.join('')}</div></div>`;
 }
 
+/** The last stand before a mass extinction strikes: one desperate choice. */
+export function standHTML(g, ev) {
+  const cards = Object.entries(STANDS).map(([id, s]) => {
+    const fx = [];
+    if (s.survival) fx.push(`<span class="fx good">+${Math.round(s.survival * 100)}% survival</span>`);
+    const cost = standCost(g, id);
+    if (cost) fx.push(`<span class="fx bad">-${Math.round(cost * 100)}% population now${g.tags.has('burrower') ? ' (burrower)' : ''}</span>`);
+    if (s.growth) fx.push(`<span class="fx good">+${Math.round(s.growth * 100)}% population now</span>`);
+    if (s.food) fx.push(`<span class="fx bad">${s.food} Food</span>`);
+    return `<button class="card" data-id="${id}">
+      <div class="card-icon">${s.icon}</div>
+      <div class="card-name">${s.name}</div>
+      <div class="card-desc">${s.desc}</div>
+      <div class="card-fx">${fx.join('')}</div>
+    </button>`;
+  }).join('');
+  return `
+    <div class="stand">
+      <div class="event-icon">${ev.icon}</div>
+      <h2>${ev.name} is coming</h2>
+      <p>${ev.warning} There is time for one last decision.</p>
+    </div>
+    <div class="cards">${cards}</div>`;
+}
+
 export function eventResultHTML(r) {
   const rows = r.breakdown.map((l) => `<tr><td>${l.label}</td><td class="${l.value >= 0 ? 'good' : 'bad'}">${pct(l.value)}</td></tr>`).join('');
   return `
@@ -231,6 +257,7 @@ export function eventResultHTML(r) {
       <tr><td>Well-fed population</td><td>×${r.fed.toFixed(2)}</td></tr>
       <tr class="total"><td>Survival</td><td>${Math.round(r.survival * 100)}%</td></tr>
     </table>
+    ${r.before !== r.unprepared ? `<p class="stand-result">${STANDS[r.stand].icon} ${STANDS[r.stand].name}: population ${fmtPop(r.unprepared)} → ${fmtPop(r.before)} before it struck.</p>` : ''}
     <p class="pop-change">Population ${fmtPop(r.before)} → <b>${fmtPop(r.after)}</b></p>
     ${r.rival ? `<p class="rival-fate">⚔️ Your rival <i>${esc(r.rival.name)}</i> ${r.rival.survived ? 'made it through too.' : 'did not survive.'}</p>` : ''}
     <p class="verdict ${r.survived ? 'good' : 'bad'}">${r.survived ? 'Your species endures.' : 'Too few remain. Your species is gone.'}</p>

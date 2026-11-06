@@ -4,6 +4,7 @@ import {
   START, CHOICES, ERAS, EVENTS, DESCENDANTS, MIN_VIABLE_POPULATION, GENERATIONS_PER_ERA,
   TIER_EFFICIENCY, OMNIVORE_EFFICIENCY, PRESENT_DAY_MYA, PREDATION, PREDATION_SAFE, FORAGE_BITE, FORAGE_CAP, BITE_SHARE,
   DRY_SECONDS, SOAK_SECONDS, DRY_TICK, DRY_SHARE, ENERGY_SECONDS, ENERGY_BITE, ENERGY_SHARE, COMPETITION, RIVAL_FOLLOWS,
+  RIVAL_HUNT_SHARE, STANDS,
 } from './data.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -352,6 +353,27 @@ export function bodyHeat(g, dt) {
   return { lost };
 }
 
+/** Carnivores bigger than their rival can hunt its members where they meet them. */
+export function canHuntRival(g) {
+  const r = g.rival;
+  return r?.status === 'alive' && habitat(r) === habitat(g) && dietLine(g) === 'carnivore' && g.traits.size > r.traits.size;
+}
+
+/** The player caught a member of the rival lineage: the rival's numbers fall (perhaps for good), and it is a meal. */
+export function huntRival(g) {
+  const r = g.rival;
+  const lost = Math.round(r.population * RIVAL_HUNT_SHARE);
+  r.population -= lost;
+  if (r.population < MIN_VIABLE_POPULATION) {
+    r.status = 'extinct';
+    r.causeOfDeath = `Hunted by ${g.name}`;
+  }
+  return { lost, food: forage(g), extinct: r.status === 'extinct' };
+}
+
+/** The share of the population a last stand costs at once (burrowers dig in cheaply). */
+export const standCost = (g, stand) => (g.tags.has('burrower') ? STANDS[stand].burrowerCost : STANDS[stand].cost) ?? 0;
+
 /** The rival takes its fork for the era: the player's own choice, often, when it is on offer. */
 export function rivalFork(g, playerChoice) {
   const rival = g.rival;
@@ -401,10 +423,16 @@ export function eventOutlook(g, id) {
   return odds(preview) - odds(g);
 }
 
-/** Resolve the era's extinction event. */
-export function resolveEvent(g) {
+/** Resolve the era's extinction event, after the player's last stand (see STANDS). */
+export function resolveEvent(g, stand = 'endure') {
   const ev = upcomingEvent(g);
+  const s = STANDS[stand];
+  const unprepared = g.population;
+  g.population = Math.round(g.population * (1 - standCost(g, stand)) * (1 + (s.growth ?? 0)));
+  if (s.food) g.meters.food = clamp(g.meters.food + s.food, 0, 100);
+  g.peakPopulation = Math.max(g.peakPopulation, g.population);
   const breakdown = eventBreakdown(g, ev);
+  if (s.survival) breakdown.push({ label: s.name, value: s.survival });
   const raw = breakdown.reduce((s, l) => s + l.value, 0);
   const health = Math.min(g.meters.food, g.meters.water, g.meters.oxygen) / 100;
   const fed = 0.5 + 0.5 * health;
@@ -425,7 +453,7 @@ export function resolveEvent(g) {
     g.causeOfDeath = ev.name;
   }
   const rival = g.rival?.status === 'alive' && upcomingEvent(g.rival) ? { name: g.rival.name, survived: resolveEvent(g.rival).survived } : null;
-  return { event: ev, breakdown, fed, survival, before, after: g.population, survived, rival };
+  return { event: ev, breakdown, fed, survival, unprepared, before, after: g.population, survived, rival, stand };
 }
 
 export function advanceEra(g) {

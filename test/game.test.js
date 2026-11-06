@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import * as G from '../src/game.js';
 import {
   CHOICES, ERAS, EVENTS, GENERATIONS_PER_ERA, FORAGE_CAP, MIN_VIABLE_POPULATION, DRY_SECONDS, SOAK_SECONDS, DRY_TICK, ENERGY_SECONDS, ENERGY_BITE,
+  STANDS, RIVAL_HUNT_SHARE,
 } from '../src/data.js';
 
 /** A game after taking these choices, advancing one era per choice like the fork phase. */
@@ -400,6 +401,56 @@ test('the rival faces the same extinctions', () => {
   assert.equal(r.rival.name, g.rival.name);
   assert.equal(r.rival.survived, g.rival.status === 'alive');
   assert.equal(g.rival.history.at(-1).kind, 'event');
+});
+
+test('a bigger carnivore can hunt its rival, down to extinction', () => {
+  const g = withChoices(['carnivore', 'largerBody', 'largerBody']);
+  G.applyChoice(g.rival, 'herbivore', 'fork');
+  assert.ok(G.canHuntRival(g));
+  const before = g.rival.population;
+  const r = G.huntRival(g);
+  assert.equal(r.lost, Math.round(before * RIVAL_HUNT_SHARE));
+  assert.equal(g.rival.population, before - r.lost);
+  assert.ok(r.food > 0, 'the catch is a meal');
+  while (g.rival.status === 'alive') G.huntRival(g);
+  assert.equal(g.rival.causeOfDeath, `Hunted by ${g.name}`);
+  assert.ok(!G.canHuntRival(g), 'nothing left to hunt');
+
+  const small = withChoices(['carnivore']);
+  G.applyChoice(small.rival, 'herbivore', 'fork');
+  small.rival.traits.size = small.traits.size;
+  assert.ok(!G.canHuntRival(small), 'only when bigger');
+  const grazer = withChoices(['herbivore', 'largerBody', 'largerBody']);
+  assert.ok(!G.canHuntRival(grazer), 'only carnivores hunt');
+});
+
+// ── Last stands ───────────────────────────────────────────────────────────
+
+/** A well-fed game facing the Ordovician Freeze, with a fixed random draw. */
+function facingFreeze(extra = []) {
+  const g = withChoices(['omnivore', ...extra], 2);
+  g.rng = () => 0.5; // no noise
+  g.rival = null;
+  g.meters = { food: 100, water: 100, oxygen: 100 };
+  return g;
+}
+
+test('hiding costs population at once but raises the odds; burrowers hide cheaply', () => {
+  const plain = G.resolveEvent(facingFreeze(), 'endure');
+  const hid = G.resolveEvent(facingFreeze(), 'hide');
+  assert.equal(hid.before, Math.round(hid.unprepared * (1 - STANDS.hide.cost)));
+  assert.ok(hid.breakdown.some((l) => l.label === STANDS.hide.name && l.value === STANDS.hide.survival));
+  assert.ok(Math.abs(hid.survival - plain.survival - STANDS.hide.survival) < 1e-9);
+  const burrower = G.resolveEvent(facingFreeze(['burrowing']), 'hide');
+  assert.equal(burrower.before, Math.round(burrower.unprepared * (1 - STANDS.hide.burrowerCost)));
+});
+
+test('breeding fast adds population at once, but leaves it hungrier', () => {
+  const plain = G.resolveEvent(facingFreeze(), 'endure');
+  const bred = G.resolveEvent(facingFreeze(), 'breed');
+  assert.equal(plain.before, plain.unprepared, 'enduring changes nothing');
+  assert.equal(bred.before, Math.round(bred.unprepared * (1 + STANDS.breed.growth)));
+  assert.ok(bred.fed < plain.fed, 'less food going in');
 });
 
 // ── Whole games ────────────────────────────────────────────────────────────

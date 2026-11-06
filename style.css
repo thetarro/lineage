@@ -75,6 +75,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .rival-status .bad { color: var(--bad); }
 .rival-fate { color: var(--muted); font-size: 14px; }
 .rival-intro { color: var(--warn); font-size: 14px; }
+.rival-status.good { color: var(--good); }
+.stand { text-align: center; }
+.stand p { color: var(--muted); }
+.stand-result { color: var(--muted); font-size: 14px; }
 .chip { font-size: 11px; background: rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 2px 8px; }
 
 #warning {
@@ -184,7 +188,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .era-intro p { color: var(--muted); }
 .fork-title { color: var(--warn); margin: 18px 0 14px; }
 
-.event-head .event-icon, .ending .event-icon { font-size: 56px; }
+.event-head .event-icon, .ending .event-icon, .stand .event-icon { font-size: 56px; }
 .event-head h2 { margin: 6px 0; }
 .event-head p { color: var(--muted); }
 .breakdown { margin: 16px auto; border-collapse: collapse; min-width: 320px; font-size: 13px; }
@@ -364,3 +368,15 @@ button.codex-tile:hover { transform: translateY(-3px); border-color: var(--accen
 .codex-stats dd { margin: 0; }
 .codex-entry h3 { margin: 0 0 6px; font-size: 15px; }
 .codex-facts { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: #d6e2e9; }
+
+/* How to play */
+.howto { text-align: center; max-width: 520px; margin: 0 auto; }
+.howto .event-icon { font-size: 56px; }
+.howto-step { color: var(--accent); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
+.howto h2 { margin: 6px 0 10px; }
+.howto ul { text-align: left; padding-left: 20px; margin: 0 0 16px; line-height: 1.5; }
+.howto li { margin-bottom: 8px; }
+.howto-dots { display: flex; justify-content: center; gap: 6px; margin-bottom: 14px; }
+.howto-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.2); }
+.howto-dots i.on { background: var(--accent); }
+.howto-buttons { display: flex; justify-content: center; gap: 10px; }

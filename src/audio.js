@@ -18,6 +18,7 @@ export class Sound {
     this.ctx = null;
     this.muted = false;
     this.theme = MUSIC.primordial;
+    this.nightOn = false;
   }
 
   /** Must be called from a user gesture (browser autoplay rules). */
@@ -52,6 +53,7 @@ export class Sound {
     this.nextNote = ctx.currentTime + 0.5;
     this.nextPad = ctx.currentTime;
     setInterval(() => this.scheduleMusic(), 100);
+    this.setNight(this.nightOn);
   }
 
   impulse(seconds) {
@@ -82,6 +84,7 @@ export class Sound {
 
   scheduleMusic() {
     if (this.ctx.state !== 'running') return;
+    if (this.nightOn && Math.random() < 0.04) this.cricket(this.now + rand(0, 0.1));
     const th = this.theme;
     while (this.nextPad < this.now + 0.3) {
       // A new chord every 8 seconds, overlapping the previous one.
@@ -167,6 +170,35 @@ export class Sound {
     this.noise(t + dur * 0.3, dur * 0.7, { type: 'bandpass', freq: 800, freqEnd: 250, q: 2, gain: gain * 0.7, attack: dur * 0.3 });
   }
 
+  // ── Night on land ──────────────────────────────────────────────────────
+
+  /** A hushed low drone, and now and then a cricket, while it is night on land. */
+  setNight(on) {
+    this.nightOn = on;
+    if (!this.ctx) return;
+    if (!this.nightGain) {
+      this.nightGain = this.ctx.createGain();
+      this.nightGain.gain.value = 0;
+      const f = this.ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = 260;
+      f.connect(this.nightGain).connect(this.master);
+      for (const [n, detune] of [[33, -6], [40, 5]]) {
+        const o = this.ctx.createOscillator();
+        o.frequency.value = midi(n);
+        o.detune.value = detune;
+        o.connect(f);
+        o.start();
+      }
+    }
+    this.nightGain.gain.setTargetAtTime(on ? 0.07 : 0, this.now, 1.5);
+  }
+
+  cricket(t) {
+    const f = rand(4200, 5200);
+    for (let i = 0; i < 3; i++) this.tone(t + i * 0.06, f, 0.04, { type: 'triangle', gain: 0.025 });
+  }
+
   // ── Game sounds ────────────────────────────────────────────────────────
 
   click() {
@@ -240,6 +272,20 @@ export class Sound {
   eat() {
     if (!this.ctx) return;
     this.tone(this.now, midi(72), 0.12, { gain: 0.08, freqEnd: midi(79) });
+  }
+
+  /** The rival got to the food first: a low, falling gulp. */
+  rivalAte() {
+    if (!this.ctx) return;
+    this.tone(this.now, midi(57), 0.22, { type: 'square', gain: 0.04, freqEnd: midi(45) });
+    this.noise(this.now, 0.1, { freq: 600, gain: 0.08 });
+  }
+
+  /** A burrower digs in: quick scratches and a soft thud. */
+  dig() {
+    if (!this.ctx) return;
+    for (let i = 0; i < 4; i++) this.noise(this.now + i * 0.08, 0.06, { type: 'bandpass', freq: rand(700, 1300), q: 2, gain: 0.25 });
+    this.tone(this.now + 0.3, 90, 0.25, { gain: 0.15, freqEnd: 55 });
   }
 
   /** A predator starts hunting: a low, uneasy pulse. */
