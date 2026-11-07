@@ -3,13 +3,14 @@
 import { World } from './world.js';
 import * as G from './game.js';
 import * as UI from './ui.js';
-import { ERAS, GENERATIONS_PER_ERA, FORAGE_CAP, STANDS } from './data.js';
+import { GENERATIONS_PER_ERA, FORAGE_CAP, STANDS } from './data.js';
 import { Joystick } from './controls.js';
 import { Sound } from './audio.js';
 import { VERSION } from './version.js';
 import { openEncyclopedia, loadDiscovered, saveDiscovered, progress } from './encyclopedia.js';
 import { openGallery, loadRuns, runRecord, saveRun } from './gallery.js';
 import { openHowTo, seenHowTo } from './howto.js';
+import { alienPlanet, planetName, randomSeed, cleanSeed } from './planet.js';
 
 const world = new World(document.getElementById('scene'));
 const joystick = new Joystick();
@@ -17,13 +18,17 @@ const sound = new Sound();
 world.input = joystick.state;
 let game;
 const discovered = loadDiscovered(); // species met in any game, for the encyclopedia
+const alien = { on: false, seed: randomSeed() }; // the title screen's world choice
 
 // First time the player gets near another species: introduce it.
 world.onEncounter = (sp) => {
   if (document.getElementById('hud').hidden) { world.met.delete(sp.id); return; }
-  const first = !discovered.has(sp.id);
-  discovered.add(sp.id);
-  saveDiscovered(discovered);
+  // The encyclopedia is Earth's: alien worlds do not fill it in.
+  const first = !game.planet && !discovered.has(sp.id);
+  if (!game.planet) {
+    discovered.add(sp.id);
+    saveDiscovered(discovered);
+  }
   UI.toast(`<div class="toast-kicker">${first ? 'New species encountered · added to the encyclopedia' : 'New species encountered'}</div><b>${sp.name}</b><p>${sp.fact}</p>`);
   UI.setLife(world.contemporaries, world.met);
   sound.discover();
@@ -216,6 +221,16 @@ function titleModal() {
       <label class="name-field">Name your species
         <span><input id="species-name" value="${UI.esc(game.name)}" maxlength="40"><button id="reroll" title="Random name">🎲</button></span>
       </label>
+      <div class="world-pick">
+        <button class="world-opt ${alien.on ? '' : 'on'}" id="world-earth">🌍 Earth</button>
+        <button class="world-opt ${alien.on ? 'on' : ''}" id="world-alien">🪐 Alien world</button>
+      </div>
+      <div class="planet-field" ${alien.on ? '' : 'hidden'}>
+        <label class="name-field">Planet seed
+          <span><input id="planet-seed" value="${UI.esc(alien.seed)}" maxlength="12"><button id="planet-reroll" title="Random planet">🎲</button></span>
+        </label>
+        <p class="planet-name">🪐 <b>${UI.esc(planetName(alien.seed))}</b> · new extinctions, same seed same world</p>
+      </div>
       <div class="title-buttons">
         <button class="primary" id="start">Begin as a single cell</button>
         <button class="secondary" id="codex">📖 Encyclopedia <small>${found}/${total}</small></button>
@@ -230,6 +245,12 @@ function titleModal() {
     </div>`, {
     buttons: {
       '#reroll': () => { document.getElementById('species-name').value = G.randomSpeciesName(); },
+      '#world-earth': () => pickWorld(false),
+      '#world-alien': () => pickWorld(true),
+      '#planet-reroll': () => {
+        document.getElementById('planet-seed').value = randomSeed();
+        showPlanetName();
+      },
       '#codex': () => {
         game.name = document.getElementById('species-name').value.trim() || game.name;
         openEncyclopedia(discovered, titleModal);
@@ -244,12 +265,30 @@ function titleModal() {
       },
       '#start': () => {
         game.name = document.getElementById('species-name').value.trim() || game.name;
+        if (alien.on) {
+          alien.seed = cleanSeed(document.getElementById('planet-seed').value) || randomSeed();
+          game = G.createGame({ name: game.name, planet: alienPlanet(alien.seed) });
+        }
         // The first game opens with how to play.
         if (seenHowTo()) begin();
         else openHowTo(begin, { doneLabel: "Let's begin" });
       },
     },
   });
+  document.getElementById('planet-seed').addEventListener('input', showPlanetName);
+}
+
+/** Earth or an alien world, chosen on the title screen. */
+function pickWorld(on) {
+  alien.on = on;
+  document.getElementById('world-earth').classList.toggle('on', !on);
+  document.getElementById('world-alien').classList.toggle('on', on);
+  document.querySelector('.planet-field').hidden = !on;
+}
+
+function showPlanetName() {
+  const seed = cleanSeed(document.getElementById('planet-seed').value);
+  document.querySelector('.planet-name b').textContent = seed ? planetName(seed) : '?';
 }
 
 function begin() {
@@ -260,7 +299,7 @@ function begin() {
 }
 
 function startEra() {
-  const era = ERAS[game.era];
+  const era = G.currentEra(game);
   world.active = false;
   setHabitat();
   world.setCreature(game);
@@ -269,7 +308,7 @@ function startEra() {
   const fork = G.forkFor(game);
   UI.showModal(`
     <div class="era-intro">
-      <div class="era-label">Era ${game.era + 1} of ${ERAS.length}</div>
+      <div class="era-label">Era ${game.era + 1} of ${G.erasOf(game).length}${game.planet ? ` · Planet ${UI.esc(game.planet.name)}` : ''}</div>
       <h1>${era.name}</h1>
       <div class="mya">${UI.fmtMya(era.mya)}</div>
       <p>${era.blurb}</p>
@@ -375,8 +414,9 @@ async function strike(ev, stand) {
   if (stand !== 'endure') UI.log(`${s.icon} Last stand: <b>${s.name}</b>.`);
   UI.hideWarning();
   UI.banner(`${ev.icon} ${ev.name}`, 3200);
-  sound.extinction(ERAS[game.era].event);
-  await world.playEvent(ERAS[game.era].event);
+  const look = ev.look ?? G.currentEra(game).event; // alien extinctions borrow an Earth disaster's look and sound
+  sound.extinction(look);
+  await world.playEvent(look);
   const r = G.resolveEvent(game, stand);
   UI.renderHUD(game);
   UI.log(`${ev.icon} <b>${ev.name}</b>: ${Math.round(r.survival * 100)}% survived.`);
@@ -417,7 +457,9 @@ function ending() {
       <div class="epilogue">
         <div class="epilogue-icon">${today.icon}</div>
         <div>
-          <div class="epilogue-kicker">${won ? 'Your lineage today' : 'Had it survived, its descendants might have been'}</div>
+          <div class="epilogue-kicker">${game.planet
+            ? (won ? 'Its closest Earth counterpart' : 'Had it survived, its closest Earth counterpart might have been')
+            : (won ? 'Your lineage today' : 'Had it survived, its descendants might have been')}</div>
           <b>${today.name}</b>
           <p>${today.fact}</p>
         </div>

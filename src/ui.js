@@ -41,9 +41,10 @@ function bar(label, value, max, cls = '') {
 
 export function renderHUD(g) {
   $('hud').hidden = false;
-  const era = ERAS[Math.min(g.era, ERAS.length - 1)];
+  const eras = g.planet?.eras ?? ERAS;
+  const era = eras[Math.min(g.era, eras.length - 1)];
   $('era-panel').innerHTML = `
-    <div class="era-label">Era ${Math.min(g.era + 1, ERAS.length)} / ${ERAS.length}</div>
+    <div class="era-label">Era ${Math.min(g.era + 1, eras.length)} / ${eras.length}${g.planet ? ` · 🪐 ${g.planet.name}` : ''}</div>
     <h2>${era.name}</h2>
     <div class="mya">${fmtMya(g.mya)} · Generation ${g.generation}/${GENERATIONS_PER_ERA}</div>
     <div class="meter pop"><span class="meter-label">👥 Population</span>
@@ -190,13 +191,14 @@ export function toast(html, ms = 6000) {
 export function timelineHTML(g) {
   const cols = [];
   const node = (cls, icon) => `<div class="tl-axis"><div class="tl-node ${cls}"><span>${icon}</span></div></div>`;
-  for (let e = 0; e <= Math.min(g.era, ERAS.length - 1); e++) {
+  const eras = g.planet?.eras ?? ERAS; // a game or a saved run, on Earth or an alien planet
+  for (let e = 0; e <= Math.min(g.era, eras.length - 1); e++) {
     const items = g.history.filter((h) => h.era === e);
     const fork = items.find((h) => h.kind === 'fork');
     const minors = items.filter((h) => h.kind === 'minor');
     const ev = items.find((h) => h.kind === 'event');
     cols.push(`<div class="tl-col tl-era">
-      <div class="tl-head"><span>Era ${e + 1}</span><b>${ERAS[e].name}</b><em>${shortMya(ERAS[e].mya)}</em></div>
+      <div class="tl-head"><span>Era ${e + 1}</span><b>${eras[e].name}</b><em>${shortMya(eras[e].mya)}</em></div>
       ${node('major', fork?.icon ?? '·')}
       <div class="tl-name">${fork?.name ?? ''}</div>
       <div class="tl-minors">${minors.map((m) => `<span class="chip">${m.icon} ${m.name}</span>`).join('')}</div>

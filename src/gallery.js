@@ -34,6 +34,8 @@ export function runRecord(g, date = Date.now()) {
     history: g.history.map(({ era, mya, kind, name, icon, survival, survived }) => ({ era, mya, kind, name, icon, survival, survived })),
     era: g.era, status: g.status, mya: g.mya, causeOfDeath: g.causeOfDeath,
     descendant: { icon: d.icon, name: d.name },
+    // Alien worlds: enough to name the planet and draw its eras on the timeline.
+    planet: g.planet && { seed: g.planet.seed, name: g.planet.name, eras: g.planet.eras.map(({ name, mya }) => ({ name, mya })) },
     // What it looked like at the end, for its portrait: the fields the creature builder reads.
     look: { tags: [...g.tags], line: g.diet?.line ?? null, size: g.traits.size, era: g.era },
   };
@@ -91,7 +93,7 @@ function listHTML(runs) {
   const rows = runs.map((run, i) => `
     <button class="run" data-i="${i}">
       <span class="run-icon">${run.won ? '🏆' : '🦴'}</span>
-      <span class="run-main"><b>${esc(run.name)}</b><small>${run.won ? `Today: ${run.descendant.icon} ${run.descendant.name}` : `Extinct: ${run.causeOfDeath}`}</small></span>
+      <span class="run-main"><b>${esc(run.name)}</b><small>${run.planet ? `🪐 ${esc(run.planet.name)} · ` : ''}${run.won ? `Today: ${run.descendant.icon} ${run.descendant.name}` : `Extinct: ${run.causeOfDeath}`}</small></span>
       <span class="run-stats"><span><b>${run.lifespan.toLocaleString()}</b> Myr</span><small>${fmtDate(run.date)}</small></span>
     </button>`).join('');
   return `
@@ -123,7 +125,7 @@ function runHTML(run) {
         <div><b>${fmtPop(run.peak)}</b><span>peak population</span></div>
         <div><b>${run.survived}</b><span>extinctions survived</span></div>
       </div>
-      <p class="codex-hint">${run.won ? `Its descendants today resemble ${run.descendant.icon} <b>${run.descendant.name}</b>.` : `Extinct: ${run.causeOfDeath}.`} Played ${fmtDate(run.date)}.</p>
+      <p class="codex-hint">${run.planet ? `Played on the alien world 🪐 <b>${esc(run.planet.name)}</b> (seed ${esc(run.planet.seed)}). ` : ''}${run.won ? `Its descendants today resemble ${run.descendant.icon} <b>${run.descendant.name}</b>${run.planet ? ' on Earth' : ''}.` : `Extinct: ${run.causeOfDeath}.`} Played ${fmtDate(run.date)}.</p>
       ${timelineHTML(run)}
     </div>`;
 }

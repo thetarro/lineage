@@ -183,6 +183,34 @@ def main():
             check(visible(page, '#modal .rival-intro'), 'the first era introduces the rival lineage')
             check('Rival' in page.inner_text('#species-panel .rival'), 'the species panel shows the rival')
 
+            print('Alien world')
+            load(page, url)
+            page.click('#world-alien')
+            page.fill('#planet-seed', 'test')
+            planet = page.inner_text('.planet-name b')
+            check(bool(planet) and planet != '?', f'the title previews the planet a seed makes ({planet})')
+            page.click('#start')
+            page.wait_for_selector('#modal .era-intro')
+            check(f'planet {planet}'.lower() in page.inner_text('#modal .era-label').lower(), 'the game takes place on that planet')
+            earth_events = ['The Great Oxidation', 'Snowball Earth', 'The Ordovician Freeze', 'Ocean Anoxia', 'The Great Dying', 'Meteor Impact', 'The Ice Age']
+            for _ in range(300):
+                page.wait_for_timeout(100)
+                if visible(page, '#modal .event-head'):
+                    break
+                if visible(page, '#modal .era-intro'):
+                    page.click('#modal .card >> nth=0')
+                elif visible(page, '#modal .stand'):
+                    page.click('#modal .card >> nth=0')
+                elif visible(page, '#face'):
+                    page.click('#face')
+                elif visible(page, '#live'):
+                    page.click('#live')
+                elif visible(page, '#actions .card'):
+                    page.click('#actions .card >> nth=0')
+            page.wait_for_selector('#modal .event-head', timeout=45000)
+            name = page.inner_text('#modal .event-head h2')
+            check(name not in earth_events, f'its extinctions are its own ({name})')
+
             print('A full game')
             saved = lambda: page.evaluate("JSON.parse(localStorage.getItem('lineage.runs') || '[]').length")
             runs_before = saved()

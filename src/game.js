@@ -18,14 +18,18 @@ export function randomSpeciesName(rng = Math.random) {
   return `${pick(GENUS, rng)}${pick(GENUS_END, rng)} ${pick(EPITHET, rng)}`;
 }
 
-/** A new game. It comes with a rival lineage: a second game played by chance (`rival: false` skips it). */
-export function createGame({ name, rng = Math.random, rival = true } = {}) {
+/**
+ * A new game, on Earth or on an alien `planet` (see planet.js). It comes with a rival lineage:
+ * a second game played by chance (`rival: false` skips it).
+ */
+export function createGame({ name, rng = Math.random, rival = true, planet = null } = {}) {
   return {
     name: name || randomSpeciesName(rng),
     rng,
+    planet,
     era: 0,
     generation: 0,
-    mya: ERAS[0].mya,
+    mya: (planet?.eras ?? ERAS)[0].mya,
     population: START.population,
     peakPopulation: START.population,
     traits: { ...START.traits },
@@ -37,7 +41,7 @@ export function createGame({ name, rng = Math.random, rival = true } = {}) {
     dryFor: 0, // seconds spent dried out since the last loss
     energy: 100, // warm-blooded species' energy, burned in real time on land
     hungryFor: 0, // seconds spent out of energy since the last loss
-    rival: rival ? createGame({ rng, rival: false }) : null,
+    rival: rival ? createGame({ rng, rival: false, planet }) : null,
     world: { shock: {}, oxygen: 1, wetness: 1 },
     history: [],
     status: 'alive', // alive | extinct | survived
@@ -53,8 +57,13 @@ export const dietLine = (g) => g.diet?.line ?? null;
 export const needsWater = (g) => g.tags.has('amphibian');
 /** Warm-blooded species burn energy in real time and must keep eating. */
 export const burnsEnergy = (g) => g.tags.has('warmBlooded');
-export const currentEra = (g) => ERAS[g.era];
-export const upcomingEvent = (g) => (ERAS[g.era]?.event ? EVENTS[ERAS[g.era].event] : null);
+/** The eras of the game's world: Earth's, or its alien planet's (same forks, its own extinctions). */
+export const erasOf = (g) => g.planet?.eras ?? ERAS;
+export const currentEra = (g) => erasOf(g)[g.era];
+export function upcomingEvent(g) {
+  const id = erasOf(g)[g.era]?.event;
+  return id ? (g.planet?.events ?? EVENTS)[id] : null;
+}
 
 /** Share of the population lost to predators each generation: defense and size protect. */
 export function predation(g) {
@@ -86,7 +95,7 @@ export function meetsRequirements(g, req) {
 }
 
 export function forkFor(g) {
-  return ERAS[g.era].forks.find((f) => meetsRequirements(g, f.requires)) ?? null;
+  return erasOf(g)[g.era].forks.find((f) => meetsRequirements(g, f.requires)) ?? null;
 }
 
 /**
@@ -282,8 +291,8 @@ function liveGeneration(g, rival) {
 
   g.generation += 1;
   g.foraged = 0;
-  const era = ERAS[g.era];
-  const nextMya = ERAS[g.era + 1]?.mya ?? PRESENT_DAY_MYA;
+  const era = erasOf(g)[g.era];
+  const nextMya = erasOf(g)[g.era + 1]?.mya ?? PRESENT_DAY_MYA;
   g.mya = era.mya - ((era.mya - nextMya) * g.generation) / (GENERATIONS_PER_ERA + 1);
 
   if (g.population < MIN_VIABLE_POPULATION) {
@@ -447,7 +456,7 @@ export function resolveEvent(g, stand = 'endure') {
   g.mya = ev.mya;
 
   const survived = g.population >= MIN_VIABLE_POPULATION;
-  g.history.push({ era: g.era, mya: ev.mya, kind: 'event', id: ERAS[g.era].event, name: ev.name, icon: ev.icon, survival, survived });
+  g.history.push({ era: g.era, mya: ev.mya, kind: 'event', id: erasOf(g)[g.era].event, name: ev.name, icon: ev.icon, survival, survived });
   if (!survived) {
     g.status = 'extinct';
     g.causeOfDeath = ev.name;
@@ -464,12 +473,12 @@ export function advanceEra(g) {
   g.dryFor = 0;
   g.energy = 100;
   g.hungryFor = 0;
-  if (g.era >= ERAS.length) {
+  if (g.era >= erasOf(g).length) {
     g.status = 'survived';
     g.mya = PRESENT_DAY_MYA;
     return false;
   }
-  g.mya = ERAS[g.era].mya;
+  g.mya = erasOf(g)[g.era].mya;
   return true;
 }
 
@@ -482,5 +491,5 @@ export function descendants(g) {
 export const extinctionsSurvived = (g) => g.history.filter((h) => h.kind === 'event' && h.survived).length;
 
 export function lifespanMyr(g) {
-  return ERAS[0].mya - g.mya;
+  return erasOf(g)[0].mya - g.mya;
 }
