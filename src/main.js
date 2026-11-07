@@ -216,6 +216,7 @@ function titleModal() {
   const { found, total } = progress(discovered);
   UI.showModal(`
     <div class="title">
+      <div class="title-badge">✦ 2.0 · Alien worlds</div>
       <h1>LINEAGE</h1>
       <p class="tagline">Every species goes extinct.<br>How long will yours last?</p>
       <label class="name-field">Name your species
