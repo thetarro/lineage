@@ -482,9 +482,34 @@ export function advanceEra(g) {
   return true;
 }
 
-/** The living group this lineage resembles (for the ending screen). */
+/**
+ * The living group this lineage resembles (for the ending screen). On an alien planet, what it
+ * became there, with its closest Earth counterpart in `earth`.
+ */
 export function descendants(g) {
-  return DESCENDANTS.find((d) => meetsRequirements(g, d.requires));
+  const earth = DESCENDANTS.find((d) => meetsRequirements(g, d.requires));
+  return g.planet ? { ...alienDescendant(g), icon: earth.icon, earth } : earth;
+}
+
+function alienDescendant(g) {
+  const t = g.tags, p = g.planet, w = p.words;
+  const has = (...tags) => tags.find((x) => t.has(x));
+  const body = {
+    cephalopod: 'Tentacled', insect: 'Six-legged', arachnid: 'Eight-legged', exoskeleton: 'Armored', fur: 'Furred', feathers: 'Feathered',
+    amphibian: 'Soft-skinned', shell: 'Shelled', spine: 'Backboned',
+  }[has('cephalopod', 'insect', 'arachnid', 'exoskeleton', 'fur', 'feathers', 'amphibian', 'shell', 'spine')] ?? 'Soft-bodied';
+  const form = {
+    intelligence: 'thinkers', flight: 'flyers', glider: 'gliders', giant: 'giants', swarm: 'swarms', colony: 'hive-builders', silk: 'web-weavers',
+  }[has('intelligence', 'giant', 'swarm', 'glider', 'colony', 'silk', 'flight')] ?? { carnivore: 'hunters', herbivore: 'grazers', omnivore: 'foragers' }[dietLine(g)] ?? 'drifters';
+  const where = t.has('terrestrial') ? `the ${w.land}` : t.has('deepSea') ? `the black depths of its ${w.sea} seas` : t.has('reef') ? `its bright ${w.sea} reefs` : `its ${w.sea} seas`;
+  const doing = {
+    thinkers: `They build, and wonder at the ${w.sun} sun, across ${where}.`,
+    flyers: `Their flocks darken the ${w.sun} sky over ${where}.`,
+    gliders: `They leap from ${where} and sail through the air on wide fins.`,
+    giants: `The largest living things on ${p.name}, slow and unbothered, roam ${where}.`,
+    swarms: `Countless billions of them ripple through ${where}.`,
+  }[form] ?? `They have spread through ${where}, under ${p.name}'s ${w.sun} sun.`;
+  return { name: `${body} ${form} of ${p.name}`, fact: doing };
 }
 
 /** How many mass extinctions the lineage has lived through. */

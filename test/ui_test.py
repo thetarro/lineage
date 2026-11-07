@@ -187,7 +187,7 @@ def main():
             load(page, url)
             page.click('#world-alien')
             page.fill('#planet-seed', 'test')
-            planet = page.inner_text('.planet-name b')
+            planet = page.inner_text('.planet-label')
             check(bool(planet) and planet != '?', f'the title previews the planet a seed makes ({planet})')
             page.click('#start')
             page.wait_for_selector('#modal .era-intro')
@@ -210,6 +210,31 @@ def main():
             page.wait_for_selector('#modal .event-head', timeout=45000)
             name = page.inner_text('#modal .event-head h2')
             check(name not in earth_events, f'its extinctions are its own ({name})')
+
+            print('Alien bestiary')
+            load(page, url)
+            page.evaluate("""async () => {
+              const { alienPlanet } = await import('/src/planet.js');
+              const { discoverAlien } = await import('/src/bestiary.js');
+              discoverAlien(alienPlanet('TEST'), 'a0');
+            }""")
+            load(page, url)
+            count = int(page.inner_text('#bestiary small').strip())
+            check(count >= 1, f'the title counts alien discoveries ({count})')
+            page.click('#bestiary')
+            page.click('.planet-tile')
+            page.wait_for_selector('.bestiary .codex-tile[data-id]')
+            check(page.locator('.bestiary .codex-tile.locked').count() > 0, "a planet's undiscovered species show as locked")
+            page.click('.bestiary .codex-tile[data-id]')
+            page.wait_for_selector('.codex-entry')
+            text = page.inner_text('.codex-entry')
+            check(all(s in text for s in ('Lived', 'Size', 'Diet', 'Facts')), 'an alien entry shows when it lived, size, diet and facts')
+            page.wait_for_function("document.querySelector('.codex-hero').src.startsWith('data:image/png')", timeout=15000)
+            check(True, 'the entry renders the alien model')
+            page.click('#bestiary-list')
+            page.click('#bestiary-planets')
+            page.click('#bestiary-close')
+            page.wait_for_selector('#start')
 
             print('A full game')
             saved = lambda: page.evaluate("JSON.parse(localStorage.getItem('lineage.runs') || '[]').length")

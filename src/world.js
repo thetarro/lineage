@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { LINE_COLORS } from './data.js';
-import { SPECIES, lifeFor } from './fauna.js';
+import { SPECIES, lifeFor, buildAlien } from './fauna.js';
 import { snapshot } from './snapshot.js';
 
 const WATER_LEVEL = -0.4; // land-mode lakes and shoreline
@@ -32,6 +32,23 @@ const THEMES = {
   reef: { bg: 0x1a8fb5, near: 14, far: 65, floor: 0xe8d8a8, hemi: 1.1, sun: 1.6, water: true },
   land: { bg: 0x9fd3f0, near: 30, far: 90, floor: 0x6a9a48, hemi: 1.1, sun: 2.2, water: false },
 };
+
+// How deep each sea habitat sits, for alien planets' sea colors: brighter on reefs, near black in the deep.
+const SEA_SHADE = { primordial: 0.85, ocean: 1, deep: 0.35, reef: 1.7 };
+
+/** An alien planet's version of a habitat theme: its own sky or sea, ground and sunlight. */
+function alienTheme(key, planet) {
+  const { sun, sky, sea, land } = planet.colors;
+  const t = { ...THEMES[key], light: sun };
+  if (key === 'land') {
+    t.bg = sky;
+    t.floor = land;
+  } else {
+    t.bg = new THREE.Color(sea).multiplyScalar(SEA_SHADE[key]).getHex();
+    t.floor = new THREE.Color(land).lerp(new THREE.Color(sea), 0.35).multiplyScalar(key === 'deep' ? 0.5 : 1).getHex();
+  }
+  return t;
+}
 
 const EVENT_LOOKS = {
   greatOxidation: { bg: 0x8a3e16, near: 4, far: 30, particles: 'bubbles', color: 0xff9a50 },
@@ -202,10 +219,13 @@ export class World {
     this.dayTime = DAY_SECONDS * 0.05; // every scene starts in the morning
     this.night = false;
     this.themeKey = themeFor(g);
-    const theme = THEMES[this.themeKey];
+    this.planet = g.planet;
+    const theme = g.planet ? alienTheme(this.themeKey, g.planet) : THEMES[this.themeKey];
     this.aquatic = theme.water;
     this.setMood(theme);
     this.mood.bg.copy(this.moodTarget.bg);
+    this.sun.color.set(theme.light ?? 0xffffff);
+    this.hemi.color.set(theme.light ?? 0xffffff);
 
     this.floorMat = mat(theme.floor, { roughness: 1 });
     this.floorBase = new THREE.Color(theme.floor);
@@ -234,7 +254,7 @@ export class World {
   }
 
   addRocks(n) {
-    const rockMat = mat(0x6b6b6b);
+    const rockMat = mat(this.planet ? new THREE.Color(this.planet.colors.land).lerp(new THREE.Color(0x555566), 0.5) : 0x6b6b6b);
     for (let i = 0; i < n; i++) {
       const r = rand(0.4, 1.6);
       const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), rockMat);
@@ -251,7 +271,10 @@ export class World {
     // Surface seen from below and shafts of light.
     const surface = new THREE.Mesh(
       new THREE.PlaneGeometry(120, 120),
-      new THREE.MeshBasicMaterial({ color: 0x8fd8ff, transparent: true, opacity: key === 'deep' ? 0 : 0.25, side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({
+        color: this.planet ? new THREE.Color(this.planet.colors.sea).lerp(new THREE.Color(0xffffff), 0.5) : 0x8fd8ff,
+        transparent: true, opacity: key === 'deep' ? 0 : 0.25, side: THREE.DoubleSide,
+      }),
     );
     surface.rotation.x = Math.PI / 2;
     surface.position.y = 16;
@@ -271,7 +294,8 @@ export class World {
     if (key === 'reef') this.addCoral(40);
     if (key === 'deep') this.addVents();
 
-    this.addParticles(key === 'deep' ? 'deepSnow' : 'plankton', key === 'deep' ? 0x99bbff : 0xddffee, 700);
+    const speck = this.planet ? new THREE.Color(this.planet.colors.life[0]).lerp(new THREE.Color(0xffffff), 0.5) : null;
+    this.addParticles(key === 'deep' ? 'deepSnow' : 'plankton', speck ?? (key === 'deep' ? 0x99bbff : 0xddffee), 700);
   }
 
   addCoral(n) {
@@ -325,13 +349,30 @@ export class World {
   buildLand(g) {
     const lake = new THREE.Mesh(
       new THREE.PlaneGeometry(120, 120),
-      new THREE.MeshStandardMaterial({ color: 0x3a8fc0, transparent: true, opacity: 0.85, roughness: 0.2 }),
+      new THREE.MeshStandardMaterial({
+        color: this.planet ? new THREE.Color(this.planet.colors.sea).lerp(new THREE.Color(0xffffff), 0.15) : 0x3a8fc0,
+        transparent: true, opacity: 0.85, roughness: 0.2,
+      }),
     );
     lake.rotation.x = -Math.PI / 2;
     lake.position.y = WATER_LEVEL;
     this.env.add(lake);
 
-    this.addParticles('pollen', 0xfff6c0, 200);
+    this.addParticles('pollen', this.planet ? this.planet.colors.sun : 0xfff6c0, 200);
+    if (this.planet) this.addMoons(this.planet);
+  }
+
+  /** An alien sky's moons: big, pale discs that ignore the fog so they read from anywhere. */
+  addMoons(planet) {
+    for (let i = 0; i < planet.moons; i++) {
+      const moon = new THREE.Mesh(
+        new THREE.SphereGeometry(i ? 9 : 16, 24, 16),
+        new THREE.MeshBasicMaterial({ color: new THREE.Color(planet.colors.life[i]).lerp(new THREE.Color(0xffffff), 0.6), fog: false }),
+      );
+      const a = -0.3 + i * 0.75; // low over the horizon ahead, where the default view looks
+      moon.position.set(Math.sin(a) * 180, 26 + i * 16, -Math.cos(a) * 180);
+      this.env.add(moon);
+    }
   }
 
   /** Whether a spot of a land world is under the lakes' water. */
@@ -351,12 +392,15 @@ export class World {
   buildLife(g) {
     const deep = this.themeKey === 'deep';
     this.contemporaries = [];
-    for (const [id, count] of lifeFor(g.era, this.aquatic ? 'water' : 'land')) {
-      const sp = SPECIES[id];
+    const habitat = this.aquatic ? 'water' : 'land';
+    // Alien planets have their own species (planet.js); Earth's come from species.js.
+    const roster = g.planet ? (g.planet.life[g.era][habitat] ?? g.planet.life[g.era].water) : lifeFor(g.era, habitat);
+    for (const [id, count] of roster) {
+      const sp = g.planet ? g.planet.species[id] : SPECIES[id];
       if (deep && sp.shallow) continue;
       this.contemporaries.push(sp);
       for (let i = 0; i < count; i++) {
-        const obj = sp.build();
+        const obj = g.planet ? buildAlien(sp) : sp.build();
         obj.scale.multiplyScalar((sp.size ?? 1) * rand(0.85, 1.15));
         // Numerous small things skip shadows to keep the frame rate up.
         obj.traverse((o) => { o.castShadow = count <= 20; });

@@ -10,7 +10,8 @@ import { VERSION } from './version.js';
 import { openEncyclopedia, loadDiscovered, saveDiscovered, progress } from './encyclopedia.js';
 import { openGallery, loadRuns, runRecord, saveRun } from './gallery.js';
 import { openHowTo, seenHowTo } from './howto.js';
-import { alienPlanet, planetName, randomSeed, cleanSeed } from './planet.js';
+import { alienPlanet, generatePlanet, randomSeed, cleanSeed } from './planet.js';
+import { openBestiary, discoverAlien, bestiaryCount } from './bestiary.js';
 
 const world = new World(document.getElementById('scene'));
 const joystick = new Joystick();
@@ -19,17 +20,25 @@ world.input = joystick.state;
 let game;
 const discovered = loadDiscovered(); // species met in any game, for the encyclopedia
 const alien = { on: false, seed: randomSeed() }; // the title screen's world choice
+const planets = new Map(); // alien planets made so far, by seed (each takes a moment to build)
+const planetFor = (seed) => {
+  if (!planets.has(seed)) planets.set(seed, alienPlanet(seed));
+  return planets.get(seed);
+};
 
 // First time the player gets near another species: introduce it.
 world.onEncounter = (sp) => {
   if (document.getElementById('hud').hidden) { world.met.delete(sp.id); return; }
-  // The encyclopedia is Earth's: alien worlds do not fill it in.
-  const first = !game.planet && !discovered.has(sp.id);
-  if (!game.planet) {
+  if (game.planet) {
+    // Alien species go to the bestiary, Earth's to the encyclopedia.
+    const first = discoverAlien(game.planet, sp.id);
+    UI.toast(`<div class="toast-kicker">${first ? 'New alien species · added to the bestiary' : 'Alien species encountered'}</div><b>${UI.esc(sp.name)}</b>, ${UI.esc(sp.title)}<p>${UI.esc(sp.fact)}</p>`);
+  } else {
+    const first = !discovered.has(sp.id);
     discovered.add(sp.id);
     saveDiscovered(discovered);
+    UI.toast(`<div class="toast-kicker">${first ? 'New species encountered · added to the encyclopedia' : 'New species encountered'}</div><b>${sp.name}</b><p>${sp.fact}</p>`);
   }
-  UI.toast(`<div class="toast-kicker">${first ? 'New species encountered · added to the encyclopedia' : 'New species encountered'}</div><b>${sp.name}</b><p>${sp.fact}</p>`);
   UI.setLife(world.contemporaries, world.met);
   sound.discover();
 };
@@ -199,11 +208,7 @@ function updateRivalPrey() {
 }
 
 function titleScreen() {
-  game = G.createGame();
-  rivalNotices = new Set();
-  world.met.clear();
-  setHabitat();
-  world.setCreature(game);
+  showWorld(G.randomSpeciesName());
   document.getElementById('hud').hidden = true;
   world.active = false;
   joystick.show(false);
@@ -216,28 +221,35 @@ function titleModal() {
   const { found, total } = progress(discovered);
   UI.showModal(`
     <div class="title">
-      <div class="title-badge">✦ 2.0 · Alien worlds</div>
+      <div class="title-badge">✦ New in 2.0 · Alien worlds</div>
       <h1>LINEAGE</h1>
       <p class="tagline">Every species goes extinct.<br>How long will yours last?</p>
       <label class="name-field">Name your species
         <span><input id="species-name" value="${UI.esc(game.name)}" maxlength="40"><button id="reroll" title="Random name">🎲</button></span>
       </label>
-      <div class="world-pick">
-        <button class="world-opt ${alien.on ? '' : 'on'}" id="world-earth">🌍 Earth</button>
-        <button class="world-opt ${alien.on ? 'on' : ''}" id="world-alien">🪐 Alien world</button>
+      <div class="world-cards">
+        <button class="world-card ${alien.on ? '' : 'on'}" id="world-earth">
+          <span class="orb earth" data-moons="1"></span>
+          <span class="world-card-text"><b>Earth</b><small>Real history, seven true mass extinctions</small></span>
+        </button>
+        <button class="world-card alien ${alien.on ? 'on' : ''}" id="world-alien">
+          <span class="orb" ${orbAttrs(alien.seed)}></span>
+          <span class="world-card-text"><b>Alien world</b><small>🪐 <span class="planet-label">${UI.esc(generatePlanet(alien.seed).name)}</span>: its own life and extinctions</small></span>
+        </button>
       </div>
       <div class="planet-field" ${alien.on ? '' : 'hidden'}>
-        <label class="name-field">Planet seed
+        <label class="name-field">Planet seed <em>· same seed, same world: share it</em>
           <span><input id="planet-seed" value="${UI.esc(alien.seed)}" maxlength="12"><button id="planet-reroll" title="Random planet">🎲</button></span>
         </label>
-        <p class="planet-name">🪐 <b>${UI.esc(planetName(alien.seed))}</b> · new extinctions, same seed same world</p>
       </div>
       <div class="title-buttons">
         <button class="primary" id="start">Begin as a single cell</button>
         <button class="secondary" id="codex">📖 Encyclopedia <small>${found}/${total}</small></button>
+        <button class="secondary" id="bestiary">🛸 Alien bestiary <small>${bestiaryCount()}</small></button>
         <button class="secondary" id="gallery">🏛️ Past lineages <small>${loadRuns().length}</small></button>
         <button class="secondary" id="howto">❓ How to play</button>
       </div>
+      <div class="whats-new"><span>New in 2.0</span>🪐 Alien worlds · 🛸 Bestiary · ⚔️ Rival lineages · 🌙 Night on land · 🕳️ Last stands</div>
       <p class="hint">
         <span class="desktop">Swim, crawl or walk with the joystick or WASD · meet the life of each era · Space/Shift to rise and sink<br>Drag to orbit · scroll to zoom · M to mute</span>
         <span class="touch">Move with the joystick · ▲▼ to rise and sink · meet the life of each era<br>Drag to orbit · pinch to zoom</span>
@@ -250,11 +262,15 @@ function titleModal() {
       '#world-alien': () => pickWorld(true),
       '#planet-reroll': () => {
         document.getElementById('planet-seed').value = randomSeed();
-        showPlanetName();
+        seedChanged(0);
       },
       '#codex': () => {
         game.name = document.getElementById('species-name').value.trim() || game.name;
         openEncyclopedia(discovered, titleModal);
+      },
+      '#bestiary': () => {
+        game.name = document.getElementById('species-name').value.trim() || game.name;
+        openBestiary(titleModal);
       },
       '#gallery': () => {
         game.name = document.getElementById('species-name').value.trim() || game.name;
@@ -266,30 +282,60 @@ function titleModal() {
       },
       '#start': () => {
         game.name = document.getElementById('species-name').value.trim() || game.name;
-        if (alien.on) {
-          alien.seed = cleanSeed(document.getElementById('planet-seed').value) || randomSeed();
-          game = G.createGame({ name: game.name, planet: alienPlanet(alien.seed) });
-        }
+        if (alien.on && game.planet?.seed !== alien.seed) showWorld(game.name);
         // The first game opens with how to play.
         if (seenHowTo()) begin();
         else openHowTo(begin, { doneLabel: "Let's begin" });
       },
     },
   });
-  document.getElementById('planet-seed').addEventListener('input', showPlanetName);
+  document.getElementById('planet-seed').addEventListener('input', () => seedChanged(500));
 }
+
+/** The title's 3D backdrop shows the chosen world: Earth, or the current seed's alien planet. */
+function showWorld(name) {
+  game = G.createGame({ name, planet: alien.on ? planetFor(alien.seed) : null });
+  rivalNotices = new Set();
+  world.met.clear();
+  setHabitat();
+  world.setCreature(game);
+}
+
+const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
+
+/** A little planet in a seed's colors, with its moons, for the alien world card. */
+function orbAttrs(seed) {
+  const { colors, moons } = generatePlanet(seed);
+  return `data-moons="${moons}" style="--sky: ${hex(colors.sky)}; --sea: ${hex(colors.sea)}; --land: ${hex(colors.land)}; --moon: ${hex(colors.life[0])}"`;
+}
+
+let backdropTimer = null;
+/** A new seed: update the card at once, and the backdrop once typing pauses (a planet takes a moment). */
+function seedChanged(delay) {
+  const seed = cleanSeed(document.getElementById('planet-seed').value);
+  if (!seed) return;
+  alien.seed = seed;
+  const card = document.getElementById('world-alien');
+  card.querySelector('.planet-label').textContent = generatePlanet(seed).name;
+  const orb = card.querySelector('.orb');
+  const tmp = document.createElement('div');
+  tmp.innerHTML = `<span ${orbAttrs(seed)}></span>`;
+  orb.dataset.moons = tmp.firstChild.dataset.moons;
+  orb.setAttribute('style', tmp.firstChild.getAttribute('style'));
+  clearTimeout(backdropTimer);
+  backdropTimer = setTimeout(() => showWorld(currentName()), delay);
+}
+
+const currentName = () => document.getElementById('species-name')?.value.trim() || game.name;
 
 /** Earth or an alien world, chosen on the title screen. */
 function pickWorld(on) {
+  if (alien.on === on) return;
   alien.on = on;
   document.getElementById('world-earth').classList.toggle('on', !on);
   document.getElementById('world-alien').classList.toggle('on', on);
   document.querySelector('.planet-field').hidden = !on;
-}
-
-function showPlanetName() {
-  const seed = cleanSeed(document.getElementById('planet-seed').value);
-  document.querySelector('.planet-name b').textContent = seed ? planetName(seed) : '?';
+  showWorld(currentName());
 }
 
 function begin() {
@@ -458,11 +504,10 @@ function ending() {
       <div class="epilogue">
         <div class="epilogue-icon">${today.icon}</div>
         <div>
-          <div class="epilogue-kicker">${game.planet
-            ? (won ? 'Its closest Earth counterpart' : 'Had it survived, its closest Earth counterpart might have been')
-            : (won ? 'Your lineage today' : 'Had it survived, its descendants might have been')}</div>
+          <div class="epilogue-kicker">${won ? `Your lineage today${game.planet ? `, on ${UI.esc(game.planet.name)}` : ''}` : 'Had it survived, its descendants might have been'}</div>
           <b>${today.name}</b>
           <p>${today.fact}</p>
+          ${today.earth ? `<p class="earth-twin">Closest Earth counterpart: ${today.earth.icon} ${today.earth.name}</p>` : ''}
         </div>
       </div>
       ${rivalFate()}

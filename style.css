@@ -169,9 +169,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 @keyframes rise { from { opacity: 0; transform: translateY(16px); } }
 
 .title h1 {
-  font-size: clamp(34px, 11vw, 56px); letter-spacing: 0.3em; margin: 0 0 4px; padding-left: 0.3em; color: var(--accent);
-  background: linear-gradient(90deg, var(--accent), #7fc4e8 50%, var(--accent-2)); -webkit-background-clip: text; background-clip: text;
-  -webkit-text-fill-color: transparent;
+  font-size: clamp(34px, 11vw, 60px); letter-spacing: 0.3em; margin: 0 0 4px; padding-left: 0.3em; color: var(--accent);
+  background: linear-gradient(90deg, var(--accent), #7fc4e8 25%, var(--accent-2) 50%, #7fc4e8 75%, var(--accent)) 0 0 / 200% 100%;
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  animation: shimmer 8s linear infinite;
+}
+@keyframes shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .title h1, .orb::before, .orb::after { animation: none; }
 }
 .title-badge {
   display: inline-block; margin-bottom: 10px; padding: 3px 12px; border-radius: 999px; font-size: 11px; font-weight: 700;
@@ -403,13 +408,58 @@ button.codex-tile:hover { transform: translateY(-3px); border-color: var(--accen
 .howto-dots i.on { background: var(--accent); }
 .howto-buttons { display: flex; justify-content: center; gap: 10px; }
 
-/* World choice on the title screen */
-.world-pick { display: inline-flex; gap: 0; margin: 4px 0 10px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-.world-opt { padding: 7px 16px; font-weight: 600; background: transparent; color: var(--muted); border: 0; }
-.world-opt + .world-opt { border-left: 1px solid var(--border); }
-.world-opt.on { background: rgba(95, 211, 184, 0.16); color: var(--text, #fff); }
-#world-alien.on { background: rgba(165, 139, 255, 0.2); }
-.planet-field { margin-bottom: 8px; }
+/* World choice on the title screen: two cards, each with a little planet */
+.world-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 4px 0 12px; text-align: left; }
+.world-card {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; text-align: left;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+.world-card:hover { transform: translateY(-1px); border-color: rgba(255, 255, 255, 0.25); }
+.world-card.on { border-color: var(--accent); background: rgba(95, 211, 184, 0.1); }
+.world-card.alien.on { border-color: var(--accent-2); background: rgba(165, 139, 255, 0.14); box-shadow: 0 0 24px rgba(165, 139, 255, 0.18); }
+.world-card-text { display: flex; flex-direction: column; min-width: 0; }
+.world-card-text b { font-size: 15px; }
+.world-card-text small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.planet-label { color: var(--accent-2); font-weight: 700; }
+.orb {
+  position: relative; flex: none; width: 46px; height: 46px; border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.5), transparent 28%),
+    radial-gradient(circle at 42% 40%, var(--sky), var(--sea) 58%, var(--land));
+  box-shadow: inset -7px -7px 14px rgba(0, 0, 0, 0.45), 0 0 18px color-mix(in srgb, var(--sky) 40%, transparent);
+}
+.orb.earth { --sky: #8fd8ff; --sea: #1e6fb0; --land: #3f8a3a; --moon: #e8eef2; }
+/* Moons circle their planet. */
+.orb[data-moons="1"]::after, .orb[data-moons="2"]::after, .orb[data-moons="2"]::before {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 9px; height: 9px; margin: -4.5px; border-radius: 50%;
+  background: color-mix(in srgb, var(--moon) 45%, white); animation: orbit 7s linear infinite;
+}
+.orb[data-moons="2"]::before { width: 6px; height: 6px; margin: -3px; animation-duration: 4.5s; animation-direction: reverse; }
+@keyframes orbit { from { transform: rotate(0deg) translateX(31px); } to { transform: rotate(360deg) translateX(31px); } }
+.planet-field { margin-bottom: 4px; }
 .planet-field[hidden] { display: none; }
-.planet-name { color: var(--muted); font-size: 13px; margin: 4px 0 0; }
-.planet-name b { color: var(--accent-2); }
+.planet-field .name-field { margin: 6px auto 14px; }
+.planet-field em { font-style: normal; opacity: 0.8; }
+.whats-new { color: var(--muted); font-size: 12px; margin-top: 16px; }
+.whats-new span {
+  display: inline-block; margin-right: 8px; padding: 1px 8px; border-radius: 999px; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase; color: #d9ceff; background: rgba(165, 139, 255, 0.16);
+}
+@media (max-width: 520px) {
+  .world-cards { grid-template-columns: 1fr; }
+}
+
+/* Alien bestiary */
+.planet-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.planet-tile {
+  display: flex; align-items: center; gap: 12px; text-align: left; padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border); border-radius: 12px;
+}
+.planet-tile:hover { border-color: var(--accent-2); }
+.planet-swatch { width: 36px; height: 36px; border-radius: 50%; flex: none; box-shadow: inset -6px -6px 12px rgba(0, 0, 0, 0.35); }
+.planet-tile-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.planet-tile-main small, .planet-tile-count { color: var(--muted); font-size: 12px; }
+.planet-tile-count { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.codex-tile .fossil { color: #d8c8a8; font-size: 11px; }
+.fossil-note { color: #d8c8a8; }
+.earth-twin { color: var(--muted); font-size: 12px; margin-top: 4px; }

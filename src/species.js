@@ -168,6 +168,9 @@ export function whereToFind(id) {
   return ERA_LIFE.flatMap((e, era) => ['water', 'land'].filter((h) => e[h]?.some(([sid]) => sid === id)).map((habitat) => ({ era, habitat })));
 }
 
+/** An era's roster as written: `water`, and `land` once there is life on land. */
+export const eraLife = (era) => ERA_LIFE[era];
+
 export function lifeFor(era, habitat) {
   const e = ERA_LIFE[Math.min(era, ERA_LIFE.length - 1)];
   return e[habitat] ?? e.water;

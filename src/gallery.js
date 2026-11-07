@@ -125,7 +125,7 @@ function runHTML(run) {
         <div><b>${fmtPop(run.peak)}</b><span>peak population</span></div>
         <div><b>${run.survived}</b><span>extinctions survived</span></div>
       </div>
-      <p class="codex-hint">${run.planet ? `Played on the alien world 🪐 <b>${esc(run.planet.name)}</b> (seed ${esc(run.planet.seed)}). ` : ''}${run.won ? `Its descendants today resemble ${run.descendant.icon} <b>${run.descendant.name}</b>${run.planet ? ' on Earth' : ''}.` : `Extinct: ${run.causeOfDeath}.`} Played ${fmtDate(run.date)}.</p>
+      <p class="codex-hint">${run.planet ? `Played on the alien world 🪐 <b>${esc(run.planet.name)}</b> (seed ${esc(run.planet.seed)}). ` : ''}${run.won ? `${run.planet ? 'Its descendants today are' : 'Its descendants today resemble'} ${run.descendant.icon} <b>${run.descendant.name}</b>.` : `Extinct: ${run.causeOfDeath}.`} Played ${fmtDate(run.date)}.</p>
       ${timelineHTML(run)}
     </div>`;
 }

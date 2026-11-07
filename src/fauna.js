@@ -1064,3 +1064,51 @@ const B = {
 for (const [id, s] of Object.entries(SPECIES)) s.build = B[id];
 
 export { SPECIES, lifeFor, speciesByEra };
+
+/**
+ * An alien species (generated in planet.js): an Earth builder remixed with the species' own
+ * colors, proportions, extra eyes, glowing spots and spines. Same facing and base as any builder.
+ */
+export function buildAlien(sp) {
+  const g = SPECIES[sp.base].build();
+  const box3 = new THREE.Box3().setFromObject(g);
+  const size = box3.getSize(new THREE.Vector3());
+  const tints = [new THREE.Color(sp.tint), new THREE.Color(sp.tint2)];
+  let k = 0;
+  g.traverse((o) => {
+    if (!o.material) return;
+    const recolor = (m) => {
+      const c = m.clone();
+      if (c.color && c.color.getHex() !== 0x111111) c.color.lerp(tints[k % 2], 0.6); // keep eyes dark
+      return c;
+    };
+    o.material = Array.isArray(o.material) ? o.material.map(recolor) : recolor(o.material);
+    k++;
+  });
+  const top = box3.max.y, front = box3.max.z, back = box3.min.z, w = size.x / 2;
+  const glow = new THREE.MeshStandardMaterial({ color: tints[1], emissive: tints[1], emissiveIntensity: 2 });
+  for (let i = 0; i < sp.eyes / 2; i++) {
+    // Extra pairs of eyes, stacked up the front of the head.
+    const r = Math.min(0.07, Math.max(0.025, size.y * 0.07));
+    for (const s of [-1, 1]) {
+      const eye = part(g, sphere(r, 8, 6), mat(0x111111, { roughness: 0.2, metalness: 0.3 }), [s * w * (0.25 + i * 0.12), top * (0.55 + i * 0.2), front - r]);
+      part(eye, sphere(r * 0.45, 6, 4), glow, [0, 0, r * 0.7]);
+    }
+  }
+  if (sp.glow) {
+    for (let i = 0; i < 6; i++) {
+      const z = back + ((i % 3) + 0.5) * (size.z / 3);
+      const pos = sp.kind === 'plant' ? [(i % 2 ? 1 : -1) * w * 0.4, top * (0.5 + 0.15 * (i % 3)), z * 0.3] : [(i < 3 ? -1 : 1) * w * 0.9, top * 0.45, z];
+      part(g, sphere(Math.max(0.03, size.y * 0.05), 6, 4), glow, pos);
+    }
+  }
+  if (sp.spikes) {
+    const spikeMat = mat(tints[1].clone().lerp(new THREE.Color(0xffffff), 0.5));
+    for (let i = 0; i < 5; i++) {
+      const h = Math.min(0.35, Math.max(0.08, size.y * 0.3));
+      part(g, cone(h * 0.25, h, 4), spikeMat, [0, top + h * 0.3, back + ((i + 0.5) / 5) * size.z]);
+    }
+  }
+  g.scale.set(...sp.stretch);
+  return g;
+}

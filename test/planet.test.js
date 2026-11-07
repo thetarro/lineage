@@ -6,6 +6,7 @@ import * as G from '../src/game.js';
 import { CHOICES, ERAS, EVENTS, TRAIT_NAMES } from '../src/data.js';
 import { generatePlanet, alienPlanet, planetName, playRandomGame, seededRandom, randomSeed, cleanSeed, FAIR_SURVIVAL } from '../src/planet.js';
 import { runRecord } from '../src/gallery.js';
+import { SPECIES, eraLife } from '../src/species.js';
 
 const SEEDS = ['7F3K', 'ABCD', 'ZZZZ', 'Q2W8', 'HELLO', 'M4X9'];
 const KNOWN_TAGS = new Set(Object.entries(CHOICES).flatMap(([id, c]) => [id, ...(c.tags ?? [])]));
@@ -94,4 +95,55 @@ test('a finished alien game remembers its planet for the gallery', () => {
   assert.equal(run.planet.seed, 'ABCD');
   assert.deepEqual(run.planet.eras.map((e) => e.name), planet.eras.map((e) => e.name));
   assert.ok(JSON.parse(JSON.stringify(run)), 'it must survive being stored as JSON');
+});
+
+test('alien life mirrors each era of Earth: the same numbers and kinds of species, remixed', () => {
+  for (const seed of SEEDS) {
+    const p = alienPlanet(seed);
+    p.life.forEach((roster, era) => {
+      for (const habitat of ['water', 'land']) {
+        const earth = eraLife(era)[habitat];
+        assert.equal(!!roster[habitat], !!earth, `${seed} era ${era}: ${habitat} life only where Earth has it`);
+        roster[habitat]?.forEach(([id, count], k) => {
+          const sp = p.species[id];
+          assert.equal(count, earth[k][1]);
+          assert.equal(sp.kind, SPECIES[earth[k][0]].kind, 'each alien fills an Earth species\' role');
+          assert.ok(SPECIES[sp.base], `${sp.name} is built from a real builder`);
+          assert.ok(sp.eras.includes(era));
+        });
+      }
+    });
+  }
+});
+
+test('alien species have names, facts, and a fate', () => {
+  for (const seed of SEEDS) {
+    const p = alienPlanet(seed);
+    const all = Object.values(p.species);
+    assert.equal(new Set(all.map((sp) => sp.name)).size, all.length, `${seed}: every name is unique`);
+    for (const sp of all) {
+      assert.ok(sp.title.startsWith('the ') && sp.facts.length && sp.fact === sp.facts[0]);
+      assert.ok(![sp.name, sp.title, sp.sizeText, sp.diet, ...sp.facts].some((t) => t.includes('{') || t.includes('undefined')), `${sp.name}: text is filled in`);
+      sp.eras.forEach((e, i) => i && assert.equal(e, sp.eras[i - 1] + 1, 'survivors live on in the very next era'));
+      const last = sp.eras.at(-1);
+      if (last < ERAS.length - 1) assert.equal(sp.wipedOutBy, p.events[p.eras[last].event].name, 'wiped out by the extinction ending its last era');
+      else assert.equal(sp.wipedOutBy, undefined, 'the last era\'s species are alive today');
+    }
+    assert.ok(all.some((sp) => sp.eras.length > 1), `${seed}: some species live through an extinction`);
+  }
+});
+
+test('on an alien planet, the ending names what the lineage became there', () => {
+  const planet = alienPlanet('7F3K');
+  const g = G.createGame({ planet });
+  for (const id of ['omnivore', 'shell', 'spine', 'goLand', 'warmBlooded', 'fur', 'intelligence']) {
+    G.applyChoice(g, id, 'fork');
+    G.advanceEra(g);
+  }
+  const d = G.descendants(g);
+  assert.equal(d.name, `Furred thinkers of ${planet.name}`);
+  assert.ok(d.fact.includes(planet.words.land));
+  assert.equal(d.earth.name, 'Primates, and one day, people', 'with its closest Earth counterpart');
+  const earthGame = G.createGame();
+  assert.equal(G.descendants(earthGame).earth, undefined, 'Earth endings are unchanged');
 });

@@ -2,6 +2,7 @@
 // Pure logic, so it also runs in Node. The evolution tree stays Earth's: only the world changes.
 
 import { ERAS, GENERATIONS_PER_ERA } from './data.js';
+import { SPECIES, eraLife } from './species.js';
 import { createGame, forkFor, applyChoice, rivalFork, simulateGeneration, minorOptions, upcomingEvent, resolveEvent, advanceEra } from './game.js';
 
 // ── Seeded randomness ──────────────────────────────────────────────────────
@@ -46,6 +47,13 @@ const SYLLABLES = ['or', 'u', 'va', 'ne', 'thal', 'ix', 'ka', 'ry', 'zen', 'mar'
 const SUNS = ['violet', 'crimson', 'pale', 'amber', 'blue-white', 'dying red', 'green-gold'];
 const SEAS = ['amber', 'ink-dark', 'milky', 'copper', 'violet', 'jade', 'rust-red'];
 const LANDS = ['glass dunes', 'fungal plains', 'basalt spires', 'crystal flats', 'black moss', 'salt mesas'];
+
+// The planet's colors follow the words that describe it (used by world.js for its scenery).
+const SUN_LIGHT = { violet: 0xc8a8ff, crimson: 0xffa090, pale: 0xf2f0ff, amber: 0xffcf7a, 'blue-white': 0xd4e6ff, 'dying red': 0xff7a5a, 'green-gold': 0xdcf08c };
+const SKY = { violet: 0x8f72d6, crimson: 0xd98c8c, pale: 0xc4c8d8, amber: 0xe8b070, 'blue-white': 0x9ab8f0, 'dying red': 0xb4563e, 'green-gold': 0xa8c870 };
+const SEA_COLOR = { amber: 0x8a5a1c, 'ink-dark': 0x101a30, milky: 0x8aa4a4, copper: 0x84442a, violet: 0x45247a, jade: 0x16705a, 'rust-red': 0x76281a };
+const LAND_COLOR = { 'glass dunes': 0xb8ccd6, 'fungal plains': 0x86608c, 'basalt spires': 0x3c3c48, 'crystal flats': 0x9cc0d4, 'black moss': 0x28382a, 'salt mesas': 0xd8c8b4 };
+const LIFE_TINTS = [0xd070ff, 0xff7ab8, 0x60e0ff, 0xffb040, 0x80ff9a, 0xff6050, 0xf0f070]; // alien life's colors
 
 // Era names and blurbs, by era: each era keeps Earth's forks (what life can become then).
 const ERA_TEXTS = [
@@ -261,7 +269,12 @@ export const planetName = (seed) => planetWords(seed).name;
 export function generatePlanet(seed, attempt = 0) {
   const { words, name } = planetWords(seed);
   const sun = pick(SUNS, words), sea = pick(SEAS, words), land = pick(LANDS, words);
-  const w = { planet: name, Planet: name, sun, Sun: cap(sun), sea, Sea: cap(sea), land };
+  const colors = {
+    sun: SUN_LIGHT[sun], sky: SKY[sun], sea: SEA_COLOR[sea], land: LAND_COLOR[land],
+    life: [pick(LIFE_TINTS, words), pick(LIFE_TINTS, words)], // the two hues alien life leans toward
+  };
+  const moons = Math.floor(words() * 3); // 0 to 2 moons hang in the sky over land
+  const w = { planet: name, Planet: name, sun, Sun: cap(sun), sea, Sea: cap(sea), land, lifeTints: colors.life };
 
   const rng = seededRandom(`${seed}#${attempt}`);
   const age = Math.round(3000 + rng() * 2400);
@@ -285,7 +298,110 @@ export function generatePlanet(seed, attempt = 0) {
     const next = eras[i + 1]?.mya ?? 0;
     events[e.event].mya = Math.max(0.5, Math.round((next + (e.mya - next) * 0.12) * 10) / 10);
   });
-  return { seed, attempt, name, sun, sea, land, eras, events };
+  return { seed, attempt, name, sun, sea, land, colors, moons, eras, events, words: w };
+}
+
+// ── Alien life ─────────────────────────────────────────────────────────────
+//
+// Each era's life mirrors Earth's roster for that era (same numbers, kinds, predators and
+// sizes, so hunts and crowds play the same), but every species is an alien remix of an Earth
+// builder: new colors, proportions, extra eyes, a glow or spines. Some live on into later
+// eras; the rest are wiped out by the extinction that ends their last era.
+
+const NOUNS = {
+  drifter: ['drifter', 'veil', 'floater'], swimmer: ['darter', 'glider', 'finner'], crawler: ['creeper', 'crawler', 'plodder'],
+  walker: ['strider', 'grazer', 'lumberer'], flyer: ['skimmer', 'flitter', 'wing'], plant: ['frond', 'spire', 'tendril', 'bloom'],
+};
+const HUNTERS = { swimmer: ['stalker', 'jaw', 'lurker'], walker: ['stalker', 'prowler', 'hunter'], crawler: ['ambusher', 'snapper'] };
+const TINT_NAMES = { 0xd070ff: 'violet', 0xff7ab8: 'rose', 0x60e0ff: 'cyan', 0xffb040: 'amber', 0x80ff9a: 'pale-green', 0xff6050: 'scarlet', 0xf0f070: 'yellow' };
+const SIZE_TEXT = (sp, rng) => {
+  const base = { drifter: 0.02, swimmer: 1.2, crawler: 0.4, walker: 2, flyer: 0.6, plant: 1.5 }[sp.kind] * (sp.size ?? 1) ** 3;
+  const m = base * (0.6 + rng() * 0.9);
+  return m < 0.01 ? 'Microscopic' : m < 1 ? `About ${Math.max(1, Math.round(m * 100))} cm` : `About ${Math.round(m)} m`;
+};
+
+function speciesFacts(sp, w, rng) {
+  const facts = [];
+  if (sp.predator) facts.push(pick(['An ambush hunter: it waits for anything slower than itself.', `The fiercest hunter of its age on ${w.planet}.`, 'It tracks prey by the ripples they leave.'], rng));
+  if (sp.eyes) facts.push(`Its ${sp.eyes + 2} eyes see in the glare of ${w.planet}'s ${w.sun} sun.`);
+  if (sp.glow) facts.push(sp.kind === 'plant' ? 'Its tips glow at night, luring small drifting things.' : 'It glows in patterns to call to its own kind.');
+  if (sp.spikes) facts.push('Spines along its back break the jaws of hunters.');
+  if (sp.kind === 'plant') facts.push(pick([`Not a plant at all: a colony of tiny animals rooted in the ${w.land}.`, `It turns its fronds to follow the ${w.sun} sun.`, 'It feeds on light and on minerals seeping from the ground.'], rng));
+  if (sp.kind === 'drifter') facts.push(pick([`It drifts in clouds of millions through the ${w.sea} water.`, 'It has no brain, yet it swims toward the light.'], rng));
+  if (sp.kind === 'walker' && !sp.predator) facts.push((sp.size ?? 1) >= 1.2 ? 'It grazes from dawn to dusk to feed its huge body.' : `Herds of them wander the ${w.land}.`);
+  if (sp.kind === 'swimmer' && !sp.predator) facts.push(pick(['It swims in tight schools that turn as one.', `It filters the ${w.sea} water through comb-like gills.`], rng));
+  if (sp.kind === 'crawler') facts.push(pick(['It sifts the seafloor silt for anything edible.', 'It can seal itself shut for days when danger passes.'], rng));
+  if (sp.kind === 'flyer') facts.push(pick(['It rides warm air for hours without a wingbeat.', 'It nests on the highest spires.'], rng));
+  return facts;
+}
+
+/** The species of each era and habitat on a planet; returned as rosters of ids, and the species by id. */
+function generateLife(seed, w, eras, events) {
+  const rng = seededRandom(`${seed}#life`);
+  const tongue = shuffle(SYLLABLES, rng).slice(0, 9); // the planet's own sounds, so its names feel related
+  const names = new Set();
+  const newName = () => {
+    for (;;) {
+      const parts = Array.from({ length: 2 + Math.floor(rng() * 2) }, () => pick(tongue, rng));
+      const n = cap(parts.join(''));
+      if (parts.every((x, i) => x !== parts[i - 1]) && !names.has(n) && n.length <= 11) return names.add(n) && n;
+    }
+  };
+  const species = {};
+  let next = 0;
+  const create = (baseId, era, habitat) => {
+    const base = SPECIES[baseId];
+    const sp = {
+      id: `a${next++}`, base: baseId, kind: base.kind, predator: !!base.predator, speed: base.speed, size: base.size, reach: base.reach,
+      sway: base.sway, shallow: base.shallow, habitat, eras: [era],
+      tint: pick(w.lifeTints, rng), tint2: pick(LIFE_TINTS, rng),
+      stretch: [0.8 + rng() * 0.5, 0.7 + rng() * 0.7, 0.8 + rng() * 0.6],
+      eyes: base.kind === 'plant' || base.kind === 'drifter' ? 0 : pick([0, 0, 2, 4], rng),
+      glow: rng() < 0.35, spikes: base.kind !== 'drifter' && rng() < 0.25,
+    };
+    const looks = [
+      sp.eyes && `${['', '', 'four', '', 'six'][sp.eyes]}-eyed`, sp.glow && 'glowing', sp.spikes && 'spined',
+      sp.stretch[1] > 1.2 && (sp.kind === 'plant' ? 'towering' : 'tall'), sp.stretch[1] < 0.85 && 'flat', TINT_NAMES[sp.tint],
+    ].filter(Boolean);
+    const noun = pick((sp.predator && HUNTERS[sp.kind]) || NOUNS[sp.kind], rng);
+    sp.name = newName();
+    sp.title = `the ${pick(looks, rng)} ${noun}`;
+    sp.sizeText = SIZE_TEXT(sp, rng);
+    sp.diet = sp.predator ? 'A hunter' : { plant: 'Light and minerals', drifter: 'Filters the water', walker: 'A grazer', flyer: 'Small drifting things' }[sp.kind] ?? 'Scraps and silt';
+    sp.facts = speciesFacts(sp, w, rng);
+    sp.fact = sp.facts[0]; // the line shown when you meet it, like Earth species
+    species[sp.id] = sp;
+    return sp;
+  };
+
+  const life = [];
+  eras.forEach((_, era) => {
+    const roster = {};
+    for (const habitat of ['water', 'land']) {
+      const earth = eraLife(era)[habitat];
+      if (!earth) continue;
+      const before = life[era - 1]?.[habitat] ?? [];
+      const used = new Set();
+      roster[habitat] = earth.map(([baseId, count]) => {
+        const kind = SPECIES[baseId].kind;
+        // Some of the last era's species live on, in place of a new one of the same kind.
+        const survivor = rng() < (kind === 'plant' ? 0.5 : 0.3)
+          && before.map(([id]) => species[id]).find((sp) => sp.kind === kind && !used.has(sp.id) && sp.eras.at(-1) === era - 1);
+        const sp = survivor || create(baseId, era, habitat);
+        if (survivor) sp.eras.push(era);
+        used.add(sp.id);
+        return [sp.id, count];
+      });
+    }
+    life.push(roster);
+  });
+
+  for (const sp of Object.values(species)) {
+    const last = sp.eras.at(-1);
+    if (last < eras.length - 1) sp.wipedOutBy = events[eras[last].event].name;
+    if (sp.eras.length > 1) sp.facts.push(`It lived through ${events[eras[sp.eras[0]].event].name}.`);
+  }
+  return { life, species };
 }
 
 // ── Fairness ───────────────────────────────────────────────────────────────
@@ -318,15 +434,19 @@ export function survivalRate(planet, games = 200) {
 // Random play reaches today in about a quarter of games on Earth: alien worlds stay near that.
 export const FAIR_SURVIVAL = [0.15, 0.4];
 
-/** A planet hard but beatable: rerolls its history (never its name) until random play lands in FAIR_SURVIVAL. */
+/**
+ * A planet hard but beatable: rerolls its history (never its name) until random play lands in
+ * FAIR_SURVIVAL, then populates it with life.
+ */
 export function alienPlanet(seed) {
   let best = null;
   for (let attempt = 0; attempt < 40; attempt++) {
     const planet = generatePlanet(seed, attempt);
     const rate = survivalRate(planet);
-    if (rate >= FAIR_SURVIVAL[0] && rate <= FAIR_SURVIVAL[1]) return { ...planet, survivalRate: rate };
-    const miss = Math.min(Math.abs(rate - FAIR_SURVIVAL[0]), Math.abs(rate - FAIR_SURVIVAL[1]));
+    const miss = rate < FAIR_SURVIVAL[0] ? FAIR_SURVIVAL[0] - rate : rate > FAIR_SURVIVAL[1] ? rate - FAIR_SURVIVAL[1] : 0;
     if (!best || miss < best.miss) best = { planet: { ...planet, survivalRate: rate }, miss };
+    if (!miss) break;
   }
-  return best.planet;
+  const { planet } = best;
+  return { ...planet, ...generateLife(seed, planet.words, planet.eras, planet.events) };
 }

@@ -28,7 +28,7 @@ Then open http://localhost:8000. There is no build step. Three.js loads from a C
 - **Foraging:** food that suits your diet is scattered around the world. Swim or walk to it to top up your Food meter, up to a limit per generation.
 - **Mass extinctions:** each one is foreshadowed during its era, and choice cards flag what clearly helps or hurts against it. Just before it strikes you make a last stand: endure, hide and wait (better odds, but many starve in hiding; burrowers hide cheaply), or breed fast (more of you, but hungrier). Survival depends on your traits, and the result screen shows exactly what helped and what hurt.
 - **Era life:** the world is populated with real prehistoric species of each era, from trilobites and Anomalocaris to sauropods and mammoths. Get close to one to learn about it and add it to the prehistory encyclopedia, which also hints where to find the ones you have not met yet.
-- **Alien worlds:** choose an alien planet on the title screen instead of Earth. Each planet comes from a short seed (the same seed always makes the same world, so friends can share one) and has its own eras and mass extinctions, built from causes like stellar flares, spore plagues and a falling moon. Every planet is checked by simulating a few hundred random games, and its history is rerolled until it is hard but beatable. Your lineage still evolves along Earth's tree; for now the scenery and the life around you are Earth's too.
+- **Alien worlds:** choose an alien planet on the title screen instead of Earth. Each planet comes from a short seed (the same seed always makes the same world, so friends can share one) and has its own eras and mass extinctions, built from causes like stellar flares, spore plagues and a falling moon. Every planet is checked by simulating a few hundred random games, and its history is rerolled until it is hard but beatable. Each planet has its own colors (sky, seas, ground, sunlight and moons) and its own life: alien species built from Earth's body plans with new colors, shapes, extra eyes, glows and spines, with generated names and facts. Some live on through several eras; the rest are wiped out by an extinction and become fossils. Species you meet go into the alien bestiary, planet by planet. At the end, the game tells you what your lineage became on that world, and its closest Earth counterpart. Your lineage itself still evolves along Earth's tree.
 - **How to play:** three short cards open your first game, and can be read again from the title screen.
 - **Music and sound:** generated in code with the Web Audio API, so there are no audio files. Nights on land bring a low drone and crickets, and there are sounds for digging in and for the rival beating you to food.
 
@@ -43,7 +43,8 @@ Then open http://localhost:8000. There is no build step. Three.js loads from a C
 | `src/fauna.js` | 3D models of the prehistoric animals and plants |
 | `src/encyclopedia.js`, `src/encyclopedia-entries.js` | The prehistory encyclopedia page, and its content for every species |
 | `src/gallery.js`, `src/howto.js` | The past lineages gallery, and the how-to-play cards |
-| `src/planet.js` | Alien worlds: planets, eras and extinctions generated from a seed, and the fairness check (runs in Node) |
+| `src/planet.js` | Alien worlds: planets, eras, extinctions and life generated from a seed, and the fairness check (runs in Node) |
+| `src/bestiary.js` | The alien bestiary page, planet by planet |
 | `src/audio.js` | Procedural music and sound effects |
 | `src/controls.js` | Joystick and keyboard input |
 | `src/ui.js`, `src/main.js` | HUD, cards, timeline and game flow |
