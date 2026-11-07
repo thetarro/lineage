@@ -134,7 +134,9 @@ export class World {
     // Graphics quality: a preset, stepped down automatically if frames drop (see quality.js).
     const q = initialQuality();
     this.autoQuality = q.auto;
-    this.monitor = new FrameMonitor({ onTooSlow: () => this.stepDownQuality() });
+    this.monitor = new FrameMonitor({ onTooSlow: () => this.stepDownQuality(), onSecond: (fps) => this.adaptResolution(fps) });
+    this.slowSeconds = 0;
+    this.fastSeconds = 0;
     this.stats = new StatsOverlay();
     this.onQualityChange = null;
     this.setQuality(q.tier);
@@ -245,10 +247,28 @@ export class World {
     this.onQualityChange?.(tier, this.autoQuality);
   }
 
-  /** Frames are dropping: in auto mode, one preset lower (never below Low). */
+  /**
+   * Adaptive resolution: a quarter step down after 2 slow seconds (under 50 fps), down to 1×;
+   * a quarter step back up after 3 seconds with headroom, up to the preset's resolution.
+   */
+  adaptResolution(fps) {
+    const max = Math.min(window.devicePixelRatio, PRESETS[this.tier].pixelRatio);
+    const ratio = this.renderer.getPixelRatio();
+    this.slowSeconds = fps < 50 ? this.slowSeconds + 1 : 0;
+    this.fastSeconds = fps > 57 ? this.fastSeconds + 1 : 0;
+    let next = ratio;
+    if (this.slowSeconds >= 2 && ratio > 1) next = Math.max(1, ratio - 0.25);
+    else if (this.fastSeconds >= 3 && ratio < max) next = Math.min(max, ratio + 0.25);
+    if (next === ratio) return;
+    this.slowSeconds = this.fastSeconds = 0;
+    this.renderer.setPixelRatio(next);
+    this.resize();
+  }
+
+  /** Frames are still dropping at the lowest resolution: in auto mode, one preset lower (never below Low). */
   stepDownQuality() {
     const i = TIERS.indexOf(this.tier);
-    if (!this.autoQuality || i === 0) return;
+    if (!this.autoQuality || i === 0 || this.renderer.getPixelRatio() > 1) return;
     this.setQuality(TIERS[i - 1]);
   }
 
@@ -814,7 +834,7 @@ export class World {
     this.renderer.info.reset();
     this.pipeline.render();
     const info = this.renderer.info.render;
-    this.stats.update(t, { fps: this.monitor.fps, calls: info.calls, triangles: info.triangles, tier: this.tier, auto: this.autoQuality });
+    this.stats.update(t, { fps: this.monitor.fps, calls: info.calls, triangles: info.triangles, tier: this.tier, auto: this.autoQuality, scale: this.renderer.getPixelRatio() });
   }
 
   /**

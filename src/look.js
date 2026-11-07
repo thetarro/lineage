@@ -145,7 +145,10 @@ export class Pipeline {
     this.composer = new EffectComposer(renderer, target);
     this.composer.addPass(new RenderPass(scene, camera));
     if (preset.ao) {
-      this.ao = new GTAOPass(scene, camera, size.x, size.y);
+      // Ambient occlusion is soft and blurry: half resolution looks the same at a quarter of the cost.
+      this.ao = new GTAOPass(scene, camera, size.x / 2, size.y / 2);
+      const setSize = this.ao.setSize.bind(this.ao);
+      this.ao.setSize = (w, h) => setSize(Math.ceil(w / 2), Math.ceil(h / 2));
       this.ao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1, scale: 1 });
       this.ao.blendIntensity = 0.85;
       this.composer.addPass(this.ao);
