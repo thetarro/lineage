@@ -2,9 +2,6 @@
 //
 //   ?quality=low|medium|high   forces a preset for this visit (the browser tests use low)
 //   ?stats                     shows the frame-rate overlay (or press F3)
-//
-// Within a preset, the render resolution adapts too: it steps down (to 1×) while frames are
-// slow and back up while there is headroom, before auto mode gives up any effects.
 
 export const PRESETS = {
   // Plain rendering at a low resolution: for phones and slow machines.
@@ -50,8 +47,8 @@ export function saveQuality(choice) {
  * to step down one preset (never up again during the visit, to avoid flickering between them).
  */
 export class FrameMonitor {
-  constructor({ minFps = 40, seconds = 4, onTooSlow, onSecond } = {}) {
-    Object.assign(this, { minFps, seconds, onTooSlow, onSecond });
+  constructor({ minFps = 40, seconds = 4, onTooSlow } = {}) {
+    Object.assign(this, { minFps, seconds, onTooSlow });
     this.frames = 0;
     this.elapsed = 0;
     this.slowFor = 0;
@@ -67,7 +64,6 @@ export class FrameMonitor {
     this.slowFor = this.fps < this.minFps ? this.slowFor + this.elapsed : 0;
     this.frames = 0;
     this.elapsed = 0;
-    this.onSecond?.(this.fps);
     if (this.slowFor >= this.seconds) {
       this.slowFor = 0;
       this.onTooSlow?.();
@@ -85,9 +81,9 @@ export class StatsOverlay {
     this.last = 0;
   }
 
-  update(t, { fps, calls, triangles, tier, auto, scale }) {
+  update(t, { fps, calls, triangles, tier, auto }) {
     if (this.el.hidden || t - this.last < 0.5) return;
     this.last = t;
-    this.el.textContent = `${Math.round(fps)} fps · ${calls} calls · ${(triangles / 1000).toFixed(1)}k tris · ${PRESETS[tier].label}${auto ? ' (auto)' : ''} · ${scale.toFixed(2)}× res`;
+    this.el.textContent = `${Math.round(fps)} fps · ${calls} calls · ${(triangles / 1000).toFixed(1)}k tris · ${PRESETS[tier].label}${auto ? ' (auto)' : ''}`;
   }
 }
