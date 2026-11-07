@@ -12,6 +12,8 @@ npm start
 
 Then open http://localhost:8000. There is no build step. Three.js loads from a CDN, so you need an internet connection.
 
+**Graphics:** Auto, Low, Medium or High on the title screen. Auto picks for the device and steps down if frames drop. Add `?quality=low|medium|high` to the address to force a preset, and `?stats` (or press F3) for a frame-rate and draw-call overlay.
+
 **Controls:** joystick (bottom right) or WASD to move · Space/Shift to rise and sink in water or the air · drag to orbit the camera · scroll to zoom · M to mute.
 
 ## How it works
@@ -43,6 +45,7 @@ Then open http://localhost:8000. There is no build step. Three.js loads from a C
 | `src/fauna.js` | 3D models of the prehistoric animals and plants |
 | `src/encyclopedia.js`, `src/encyclopedia-entries.js` | The prehistory encyclopedia page, and its content for every species |
 | `src/gallery.js`, `src/howto.js` | The past lineages gallery, and the how-to-play cards |
+| `src/look.js`, `src/quality.js` | Lighting and finish (sky, image-based light, caustics, ambient occlusion, bloom, grading), and the graphics presets |
 | `src/planet.js` | Alien worlds: planets, eras, extinctions and life generated from a seed, and the fairness check (runs in Node) |
 | `src/bestiary.js` | The alien bestiary page, planet by planet |
 | `src/audio.js` | Procedural music and sound effects |

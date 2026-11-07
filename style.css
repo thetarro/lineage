@@ -463,3 +463,15 @@ button.codex-tile:hover { transform: translateY(-3px); border-color: var(--accen
 .codex-tile .fossil { color: #d8c8a8; font-size: 11px; }
 .fossil-note { color: #d8c8a8; }
 .earth-twin { color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+/* Graphics menu and the development stats overlay */
+.gfx { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; margin-top: 10px; }
+.gfx select {
+  background: rgba(255, 255, 255, 0.06); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+  padding: 4px 8px; font: inherit;
+}
+#stats {
+  position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 50; pointer-events: none;
+  background: rgba(0, 0, 0, 0.6); color: #cfe; font: 12px/1.2 ui-monospace, monospace; padding: 4px 10px; border-radius: 6px;
+}
+#stats[hidden] { display: none; }

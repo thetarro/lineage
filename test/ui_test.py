@@ -89,7 +89,7 @@ def play(page, url, want=(), stop_at=None):
 
 def main():
     port = free_port()
-    url = f'http://localhost:{port}/'
+    url = f'http://localhost:{port}/?quality=low'  # plain rendering: software WebGL is slow
     server = subprocess.Popen([sys.executable, str(ROOT / 'serve.py'), str(port)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(1)
     match = re.search(r"VERSION = '([^']+)'", (ROOT / 'src/version.js').read_text())
@@ -259,6 +259,14 @@ def main():
             page.click('#gallery-list')
             page.click('#gallery-close')
             page.wait_for_selector('#start')
+
+            print('Graphics')
+            check(page.input_value('#gfx') == 'low', 'the Graphics menu shows the preset in use')
+            load(page, url.replace('quality=low', 'quality=high&stats'))
+            page.wait_for_timeout(3000)
+            stats = page.inner_text('#stats')
+            check('High' in stats and 'calls' in stats, f'High renders, with the stats overlay ({stats})')
+            load(page, url)
 
             print('Phone layout')
             page.set_viewport_size({'width': 390, 'height': 844})

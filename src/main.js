@@ -12,6 +12,7 @@ import { openGallery, loadRuns, runRecord, saveRun } from './gallery.js';
 import { openHowTo, seenHowTo } from './howto.js';
 import { alienPlanet, generatePlanet, randomSeed, cleanSeed } from './planet.js';
 import { openBestiary, discoverAlien, bestiaryCount } from './bestiary.js';
+import { PRESETS, TIERS, saveQuality, initialQuality } from './quality.js';
 
 const world = new World(document.getElementById('scene'));
 const joystick = new Joystick();
@@ -254,6 +255,12 @@ function titleModal() {
         <span class="desktop">Swim, crawl or walk with the joystick or WASD · meet the life of each era · Space/Shift to rise and sink<br>Drag to orbit · scroll to zoom · M to mute</span>
         <span class="touch">Move with the joystick · ▲▼ to rise and sink · meet the life of each era<br>Drag to orbit · pinch to zoom</span>
       </p>
+      <label class="gfx">Graphics
+        <select id="gfx">
+          <option value="auto">Auto${world.autoQuality ? ` (${PRESETS[world.tier].label})` : ''}</option>
+          ${TIERS.map((t) => `<option value="${t}">${PRESETS[t].label}</option>`).join('')}
+        </select>
+      </label>
       <p class="version">v${VERSION}</p>
     </div>`, {
     buttons: {
@@ -290,6 +297,18 @@ function titleModal() {
     },
   });
   document.getElementById('planet-seed').addEventListener('input', () => seedChanged(500));
+  const gfx = document.getElementById('gfx');
+  gfx.value = world.autoQuality ? 'auto' : world.tier;
+  gfx.addEventListener('change', () => setGraphics(gfx.value));
+}
+
+/** The Graphics menu: Auto picks for the device (and steps down if frames drop), or a fixed preset. */
+function setGraphics(choice) {
+  saveQuality(choice);
+  world.autoQuality = choice === 'auto';
+  world.setQuality(choice === 'auto' ? initialQuality().tier : choice);
+  const auto = document.querySelector('#gfx option[value="auto"]');
+  if (auto) auto.textContent = `Auto${world.autoQuality ? ` (${PRESETS[world.tier].label})` : ''}`;
 }
 
 /** The title's 3D backdrop shows the chosen world: Earth, or the current seed's alien planet. */

@@ -6,6 +6,8 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { LINE_COLORS } from './data.js';
 import { SPECIES, lifeFor, buildAlien } from './fauna.js';
 import { snapshot } from './snapshot.js';
+import { createSky, gradientEnvironment, addCaustics, Pipeline } from './look.js';
+import { PRESETS, TIERS, initialQuality, FrameMonitor, StatsOverlay } from './quality.js';
 
 const WATER_LEVEL = -0.4; // land-mode lakes and shoreline
 const BOUNDS = 26; // how far the player can roam from the center
@@ -15,6 +17,11 @@ const DAY_SECONDS = 100; // a full day and night on land, in real time
 const NIGHT_SKY = new THREE.Color(0x0b1430);
 const FLASH_SKY = new THREE.Color(0xfff2d0);
 const RIVAL_KIN = 3; // members of the rival lineage roaming the player's world
+// Image-based lighting does much of the fill light, so the hemisphere light is turned down.
+const HEMI_WITH_ENV = 0.55;
+const ENV_FILL = 0.45; // how bright the sky's image-based light is
+// Caustic light on the seafloor, by habitat (none in the dark deep or on land).
+const CAUSTICS = { primordial: 0.2, ocean: 0.35, reef: 0.45 };
 
 const groundHeight = (x, z) =>
   Math.sin(x * 0.18) * 0.7 + Math.cos(z * 0.22) * 0.6 + Math.sin((x + z) * 0.08) * 1.0;
@@ -30,7 +37,7 @@ const THEMES = {
   ocean: { bg: 0x0d4a6e, near: 10, far: 55, floor: 0xc2b280, hemi: 1.0, sun: 1.3, water: true },
   deep: { bg: 0x0b2440, near: 6, far: 40, floor: 0x2e3a50, hemi: 1.0, sun: 0.6, water: true },
   reef: { bg: 0x1a8fb5, near: 14, far: 65, floor: 0xe8d8a8, hemi: 1.1, sun: 1.6, water: true },
-  land: { bg: 0x9fd3f0, near: 30, far: 90, floor: 0x6a9a48, hemi: 1.1, sun: 2.2, water: false },
+  land: { bg: 0x78b8ec, near: 35, far: 110, floor: 0x6a9a48, hemi: 1.1, sun: 2.2, water: false }, // a deep blue: tone mapping pales skies
 };
 
 // How deep each sea habitat sits, for alien planets' sea colors: brighter on reefs, near black in the deep.
@@ -89,16 +96,22 @@ export class World {
   constructor(container) {
     this.container = container;
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    // Phones get a lighter render: lower resolution and smaller shadow maps.
-    const phone = window.matchMedia('(pointer: coarse)').matches && Math.min(window.innerWidth, window.innerHeight) < 600;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, phone ? 1.5 : 2));
+    // Filmic tone mapping keeps bright light and deep shadow from washing out.
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.info.autoReset = false; // counted over the whole frame, post-processing included
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x000000);
     this.scene.fog = new THREE.Fog(0x000000, 10, 50);
+    this.sky = createSky();
+    this.scene.add(this.sky);
+    this.pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.envKey = null; // what the current image-based lighting was made from
+    this.envAge = 0;
+    this.causticUniforms = { uCausticTime: { value: 0 }, uCaustic: { value: 0 }, uCausticColor: { value: new THREE.Color(1, 1, 1) } };
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 300);
     this.camera.position.set(0, 9, 22);
 
@@ -113,9 +126,18 @@ export class World {
     this.sun = new THREE.DirectionalLight(0xffffff, 1.5);
     this.sun.position.set(10, 25, 8);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.setScalar(phone ? 1024 : 2048);
     Object.assign(this.sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30 });
+    this.sun.shadow.bias = -0.0005;
+    this.sun.shadow.normalBias = 0.02;
     this.scene.add(this.hemi, this.sun);
+
+    // Graphics quality: a preset, stepped down automatically if frames drop (see quality.js).
+    const q = initialQuality();
+    this.autoQuality = q.auto;
+    this.monitor = new FrameMonitor({ onTooSlow: () => this.stepDownQuality() });
+    this.stats = new StatsOverlay();
+    this.onQualityChange = null;
+    this.setQuality(q.tier);
 
     // Everything that shakes during disasters lives in `stage`.
     this.stage = new THREE.Group();
@@ -152,14 +174,14 @@ export class World {
     // Floating marker over the leader: the individual the player steers.
     this.marker = new THREE.Mesh(
       new THREE.ConeGeometry(0.22, 0.45, 4),
-      new THREE.MeshStandardMaterial({ color: 0x5fd3b8, emissive: 0x5fd3b8, emissiveIntensity: 0.8, flatShading: true }),
+      new THREE.MeshStandardMaterial({ color: 0x5fd3b8, emissive: 0x5fd3b8, emissiveIntensity: 1.6, flatShading: true }),
     );
     this.marker.rotation.x = Math.PI;
     this.stage.add(this.marker);
     // The same marker in red over a predator that is hunting the player.
     this.huntMarker = new THREE.Mesh(
       new THREE.ConeGeometry(0.3, 0.6, 4),
-      new THREE.MeshStandardMaterial({ color: 0xff4d4d, emissive: 0xff4d4d, emissiveIntensity: 0.9, flatShading: true }),
+      new THREE.MeshStandardMaterial({ color: 0xff4d4d, emissive: 0xff4d4d, emissiveIntensity: 2.2, flatShading: true }),
     );
     this.huntMarker.rotation.x = Math.PI;
     this.huntMarker.visible = false;
@@ -167,7 +189,7 @@ export class World {
     // An orange one over the rival lineage, which competes for the player's food.
     this.rivalMarker = new THREE.Mesh(
       new THREE.ConeGeometry(0.2, 0.4, 4),
-      new THREE.MeshStandardMaterial({ color: 0xff9a2e, emissive: 0xff9a2e, emissiveIntensity: 0.8, flatShading: true }),
+      new THREE.MeshStandardMaterial({ color: 0xff9a2e, emissive: 0xff9a2e, emissiveIntensity: 1.6, flatShading: true }),
     );
     this.rivalMarker.rotation.x = Math.PI;
     this.rivalMarker.visible = false;
@@ -199,8 +221,43 @@ export class World {
     const w = this.container.clientWidth;
     const h = this.container.clientHeight;
     this.renderer.setSize(w, h);
+    this.pipeline?.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+  }
+
+  // ── Graphics quality ───────────────────────────────────────────────────
+
+  /** Switch to a preset: resolution, shadows and post-processing. */
+  setQuality(tier) {
+    const p = PRESETS[tier];
+    this.tier = tier;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, p.pixelRatio));
+    this.renderer.shadowMap.type = p.softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    this.sun.shadow.mapSize.setScalar(p.shadows);
+    this.sun.shadow.map?.dispose();
+    this.sun.shadow.map = null;
+    this.pipeline?.dispose();
+    this.pipeline = new Pipeline(this.renderer, this.scene, this.camera, p);
+    if (this.container.clientWidth) this.resize();
+    this.scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); });
+    this.applyGrade();
+    this.onQualityChange?.(tier, this.autoQuality);
+  }
+
+  /** Frames are dropping: in auto mode, one preset lower (never below Low). */
+  stepDownQuality() {
+    const i = TIERS.indexOf(this.tier);
+    if (!this.autoQuality || i === 0) return;
+    this.setQuality(TIERS[i - 1]);
+  }
+
+  /** Earth is graded neutral; an alien world is tinted toward its sunlight and a little richer. */
+  applyGrade() {
+    if (!this.pipeline) return;
+    const tint = new THREE.Color(1, 1, 1);
+    if (this.planet) tint.lerp(new THREE.Color(this.planet.colors.sun), 0.12);
+    this.pipeline.setGrade(this.planet ? 1.12 : 1.06, tint);
   }
 
   // ── Environment ────────────────────────────────────────────────────────
@@ -229,6 +286,12 @@ export class World {
 
     this.floorMat = mat(theme.floor, { roughness: 1 });
     this.floorBase = new THREE.Color(theme.floor);
+    // Sunlight ripples over the seafloor in the bright seas.
+    this.causticUniforms.uCaustic.value = CAUSTICS[this.themeKey] ?? 0;
+    this.causticUniforms.uCausticColor.value.set(theme.light ?? 0xffffff).lerp(new THREE.Color(0xffffff), 0.4);
+    if (CAUSTICS[this.themeKey]) addCaustics(this.floorMat, this.causticUniforms);
+    this.envKey = null; // relight from the new sky
+    this.applyGrade();
     const floorGeo = new THREE.PlaneGeometry(90, 90, 60, 60);
     floorGeo.rotateX(-Math.PI / 2);
     const pos = floorGeo.attributes.position;
@@ -684,8 +747,10 @@ export class World {
   // ── Frame loop ─────────────────────────────────────────────────────────
 
   tick() {
-    const dt = Math.min(this.clock.getDelta(), 0.05);
+    const raw = this.clock.getDelta();
+    const dt = Math.min(raw, 0.05);
     const t = this.clock.elapsedTime;
+    this.monitor.tick(raw);
 
     // Ease lighting & fog toward the target mood.
     const k = 1 - Math.exp(-dt * 1.5);
@@ -699,12 +764,15 @@ export class World {
     this.updateDaylight(roaming ? dt : 0);
     const day = this.daylight;
     this.scene.background.copy(this.mood.bg).lerp(NIGHT_SKY, (1 - day) * 0.85).lerp(FLASH_SKY, this.flash);
-    this.scene.fog.color.copy(this.scene.background);
-    const sight = (this.perks.keen ? 1.5 : 1) * (0.6 + 0.4 * day); // keen eyes see farther; everyone sees less at night
+    this.updateSky(day, dt);
+    // Keen eyes see farther; everyone sees less at night. Post-processing blends fog in linear light,
+    // which reads hazier on land than the plain render, so it starts a little farther out there.
+    const sight = (this.perks.keen ? 1.5 : 1) * (0.6 + 0.4 * day) * (this.pipeline.composer && !this.aquatic ? 1.35 : 1);
     this.scene.fog.near = this.mood.near * sight;
     this.scene.fog.far = this.mood.far * sight;
-    this.hemi.intensity = this.mood.hemi * (0.35 + 0.65 * day) + this.flash * 4;
+    this.hemi.intensity = this.mood.hemi * (0.35 + 0.65 * day) * HEMI_WITH_ENV + this.flash * 4;
     this.sun.intensity = this.mood.sun * (0.1 + 0.9 * day);
+    this.causticUniforms.uCausticTime.value = t;
 
     this.animations = this.animations.filter((a) => {
       a.t = Math.min(a.t + dt, a.duration);
@@ -743,7 +811,53 @@ export class World {
     this.stage.position.set(rand(-1, 1) * this.shake, rand(-1, 1) * this.shake, 0);
 
     this.controls.update();
-    this.renderer.render(this.scene, this.camera);
+    this.renderer.info.reset();
+    this.pipeline.render();
+    const info = this.renderer.info.render;
+    this.stats.update(t, { fps: this.monitor.fps, calls: info.calls, triangles: info.triangles, tier: this.tier, auto: this.autoQuality });
+  }
+
+  /**
+   * The sky dome's gradient follows the mood (and night), with the fog matching its horizon;
+   * the image-based lighting is remade from it whenever it has changed enough.
+   */
+  updateSky(day, dt) {
+    const bg = this.scene.background;
+    const u = this.sky.material.uniforms;
+    const sunColor = this.sun.color;
+    if (this.aquatic) {
+      // Under water: light from the surface above, fading into the depths below.
+      u.uTop.value.copy(bg).lerp(sunColor, this.themeKey === 'deep' ? 0.05 : 0.3).multiplyScalar(1.25);
+      u.uHorizon.value.copy(bg);
+      u.uBottom.value.copy(bg).multiplyScalar(0.35);
+      u.uSun.value = 0;
+      u.uStars.value = 0;
+    } else {
+      // On land: a deeper, richer zenith, a lighter horizon, the sun by day and stars by night.
+      const zenith = this.planet ? new THREE.Color(this.planet.colors.sky).multiplyScalar(0.55) : new THREE.Color(0x2f6fd0);
+      u.uTop.value.copy(bg).lerp(zenith, 0.6 * day);
+      u.uHorizon.value.copy(bg).lerp(new THREE.Color(0xffffff), 0.1 * day);
+      u.uBottom.value.copy(this.floorBase ?? bg).multiplyScalar(0.5 * (0.2 + 0.8 * day));
+      u.uSunDir.value.copy(this.sun.position).normalize();
+      u.uSunColor.value.copy(sunColor);
+      u.uSun.value = day;
+      u.uStars.value = 1 - day;
+    }
+    this.scene.fog.color.copy(u.uHorizon.value);
+    this.sky.position.copy(this.camera.position);
+
+    this.envAge += dt;
+    const key = `${u.uTop.value.getHexString()}${u.uHorizon.value.getHexString()}${u.uBottom.value.getHexString()}`;
+    if (key !== this.envKey && (this.envKey === null || this.envAge > 0.5)) {
+      this.envKey = key;
+      this.envAge = 0;
+      this.envTarget?.dispose();
+      // The sky only fills in the shadows: the sun and the hemisphere light do the rest.
+      const fill = ENV_FILL * (this.aquatic ? 1 : 0.3 + 0.7 * day);
+      const scaled = (c) => c.clone().multiplyScalar(fill);
+      this.envTarget = gradientEnvironment(this.pmrem, scaled(u.uTop.value), scaled(u.uHorizon.value), scaled(u.uBottom.value));
+      this.scene.environment = this.envTarget.texture;
+    }
   }
 
   moveLife(e, t) {

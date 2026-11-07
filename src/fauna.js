@@ -1086,7 +1086,7 @@ export function buildAlien(sp) {
     k++;
   });
   const top = box3.max.y, front = box3.max.z, back = box3.min.z, w = size.x / 2;
-  const glow = new THREE.MeshStandardMaterial({ color: tints[1], emissive: tints[1], emissiveIntensity: 2 });
+  const glow = new THREE.MeshStandardMaterial({ color: tints[1], emissive: tints[1], emissiveIntensity: 1.8 });
   for (let i = 0; i < sp.eyes / 2; i++) {
     // Extra pairs of eyes, stacked up the front of the head.
     const r = Math.min(0.07, Math.max(0.025, size.y * 0.07));
